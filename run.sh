@@ -1,6 +1,6 @@
 #! /bin/bash
 
-for i in $(pwd)/lib/java/*.jar; do
+for i in $(pwd)/build/lib/java/*.jar; do
 	CLASSPATH="$CLASSPATH:$i"
 done
 export JAVA_HOME=/usr/lib/jvm/java-6-sun
