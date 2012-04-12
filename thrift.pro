@@ -4,23 +4,60 @@ QMAKE_CXXFLAGS = -std=gnu++0x -rdynamic
 
 TEMPLATE = app
 TARGET = thrift
+VERSION = -1.0.0
 DEPENDPATH += src/cpp src/gen-cpp
 INCLUDEPATH += src/cpp src/gen-cpp
 
 ARCH = amd64
 JAVA_HOME = ${JAVA_HOME}
+JAVAC = $$JAVA_HOME/bin/javac
 INCLUDEPATH += $$JAVA_HOME/include
 INCLUDEPATH += $$JAVA_HOME/include/linux
 LIBS += $$JAVA_HOME/jre/lib/$$ARCH/server/libjvm.so
 
-CONFIG += debug warn_on link_pkgconfig
+CONFIG += silent debug warn_on link_pkgconfig nostrip
 QT -= gui
 
-PKGCONFIG += thrift thrift-nb
+PKGCONFIG += thrift thrift-nb libevent
 
-DESTDIR = build
-MOC_DIR = build
-OBJECTS_DIR = build
+BUILD_DIR = build
+
+DESTDIR = $$BUILD_DIR/bin
+OBJECTS_DIR = $$BUILD_DIR/.obj
+MOC_DIR = $$BUILD_DIR/.moc
+
+JAVA_SOURCES = src/java/com/stumbleupon/async/GenericCallback.java
+JAVA_TARGET = $$BUILD_DIR/lib/$$TARGET$$VERSION/java/suasync-generic-callback.jar
+JAVA_DEPS = \
+	lib/java/asynchbase-1.2.0.jar.md5 \
+	lib/java/log4j-over-slf4j-1.6.4.jar.md5 \
+	lib/java/netty-3.3.1.Final.jar.md5 \
+	lib/java/slf4j-api-1.6.4.jar.md5 \
+	lib/java/slf4j-simple-1.6.4.jar.md5 \
+	lib/java/suasync-1.2.0.jar.md5 \
+	lib/java/zookeeper-3.3.4.jar.md5
+
+java.input = JAVA_SOURCES
+java.output = $$JAVA_TARGET
+java.commands = $${QMAKE_MKDIR} $$OBJECTS_DIR/java && $$JAVAC -cp `dirname ${QMAKE_FILE_OUT}`/\'*\' -d $$OBJECTS_DIR/java ${QMAKE_FILE_IN} && jar cvf ${QMAKE_FILE_OUT} -C $$OBJECTS_DIR/java `ls $$OBJECTS_DIR/java` || (rm ${QMAKE_FILE_OUT} && false)
+silent:java.commands = @echo generating ${QMAKE_FILE_OUT_BASE}.jar && $$java.commands
+java.clean_commands = rm -rf $$OBJECTS_DIR/java
+java.variable_out = POST_TARGETDEPS
+java.CONFIG += no_link combine
+
+java_dep.input = JAVA_DEPS
+java_dep.output = $$BUILD_DIR/lib/$$TARGET$$VERSION/java/${QMAKE_FILE_IN_BASE}
+java_dep.commands = curl -sS `cat ${QMAKE_FILE_IN} | cut -b 33-` -o ${QMAKE_FILE_OUT} && test `md5sum ${QMAKE_FILE_OUT} | awk \'{print \$$1;}\'` = `cat ${QMAKE_FILE_IN} | cut -b -32` || (rm ${QMAKE_FILE_OUT} && false)
+silent:java_dep.commands = @echo downloading ${QMAKE_FILE_OUT_BASE} && $$java_dep.commands
+java_dep.variable_out = PRE_TARGETDEPS
+java_dep.CONFIG += no_link
+
+QMAKE_EXTRA_COMPILERS += java java_dep
+
+target.path = /bin/
+INSTALLS += target
+
+QMAKE_CLEAN += ${TARGET}
 
 HEADERS += src/cpp/main.h \
 	src/gen-cpp/Hbase_types.h \
@@ -29,6 +66,7 @@ HEADERS += src/cpp/main.h \
 	src/cpp/JniHelper.h \
 	src/cpp/JavaObject.h \
 	src/cpp/HBaseClient.h
+
 SOURCES += src/cpp/main.cpp \
 	src/gen-cpp/Hbase_constants.cpp \
 	src/gen-cpp/Hbase.cpp \
