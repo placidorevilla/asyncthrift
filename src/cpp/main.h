@@ -3,16 +3,17 @@
 
 #include "HBaseClient.h"
 
-#include <QCoreApplication>
+#include "TApplication.h"
+
 #include <QFutureWatcher>
 
-class MainApp : public QCoreApplication
+class MainApp : public TApplication
 {
 	Q_OBJECT
 
 public:
 	MainApp(int argc, char** argv);
-	int run();
+	virtual int run();
 
 public slots:
 	void handleFinished();

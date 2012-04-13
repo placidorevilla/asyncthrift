@@ -5,7 +5,7 @@
 
 using namespace AsyncHBase;
 
-MainApp::MainApp(int argc, char** argv) : QCoreApplication(argc, argv)
+MainApp::MainApp(int argc, char** argv) : TApplication(argc, argv)
 {
 	this->hbase_client = new HBaseClient("localhost", "/hbase");
 
@@ -77,6 +77,6 @@ PendingRequest::~PendingRequest()
 int main(int argc, char **argv)
 {
 	MainApp app(argc, argv);
-	return app.run();
+	return app.start();
 }
 
