@@ -73,7 +73,9 @@ HEADERS += src/cpp/main.h \
 	src/cpp/TApplication.h \
 	src/cpp/JniHelper.h \
 	src/cpp/JavaObject.h \
-	src/cpp/HBaseClient.h
+	src/cpp/HBaseClient.h \
+	src/cpp/HBaseHandler.h \
+	src/cpp/ThriftDispatcher.h
 
 SOURCES += src/cpp/main.cpp \
 	src/gen-cpp/Hbase_constants.cpp \
@@ -82,5 +84,7 @@ SOURCES += src/cpp/main.cpp \
 	src/cpp/TApplication.cpp \
 	src/cpp/JniHelper.c \
 	src/cpp/JavaObject.cpp \
-	src/cpp/HBaseClient.cpp
+	src/cpp/HBaseClient.cpp \
+	src/cpp/HBaseHandler.cpp \
+	src/cpp/ThriftDispatcher.cpp
 

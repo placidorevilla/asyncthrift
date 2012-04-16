@@ -1,11 +1,9 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#include "HBaseClient.h"
-
 #include "TApplication.h"
 
-#include <QFutureWatcher>
+class ThriftDispatcher;
 
 class MainApp : public TApplication
 {
@@ -13,29 +11,11 @@ class MainApp : public TApplication
 
 public:
 	MainApp(int argc, char** argv);
+	virtual ~MainApp();
 	virtual int run();
 
-public slots:
-	void handleFinished();
-	void handleExit();
-
-protected:
-	virtual void timerEvent(QTimerEvent *event);
-
 private:
-	AsyncHBase::HBaseClient* hbase_client;
-};
-
-class PendingRequest : public QFutureWatcher<void>
-{
-	Q_OBJECT
-
-public:
-	PendingRequest(AsyncHBase::PutRequest* pr) : QFutureWatcher<void>(), _pr(pr) {}
-	~PendingRequest();
-
-private:
-	AsyncHBase::PutRequest* _pr;
+	ThriftDispatcher* _td;
 };
 
 #endif // MAIN_H
