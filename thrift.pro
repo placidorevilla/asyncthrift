@@ -75,6 +75,7 @@ HEADERS += src/cpp/main.h \
 	src/cpp/JavaObject.h \
 	src/cpp/HBaseClient.h \
 	src/cpp/HBaseHandler.h \
+	src/cpp/HBaseHandler_p.h \
 	src/cpp/ThriftDispatcher.h
 
 SOURCES += src/cpp/main.cpp \

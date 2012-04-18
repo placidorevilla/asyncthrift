@@ -25,7 +25,7 @@ class ThriftDispatcherPrivate {
 public:
 	void run(int port = 9090, int nthreads = 4)
 	{
-		shared_ptr<HbaseHandler> handler(new HbaseHandler());
+		shared_ptr<HBaseHandler> handler(new HBaseHandler());
 		shared_ptr<TProcessor> processor(new HbaseProcessor(handler));
 		shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
 		shared_ptr<ThreadManager> thread_manager = ThreadManager::newSimpleThreadManager(nthreads);
