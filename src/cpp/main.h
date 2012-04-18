@@ -3,6 +3,8 @@
 
 #include "TApplication.h"
 
+#include <log4cxx/logger.h>
+
 class ThriftDispatcher;
 
 class MainApp : public TApplication
@@ -12,10 +14,14 @@ class MainApp : public TApplication
 public:
 	MainApp(int argc, char** argv);
 	virtual ~MainApp();
+
+	virtual bool init();
 	virtual int run();
 
+	virtual void signal_received(int signo);
 private:
 	ThriftDispatcher* _td;
+	static log4cxx::LoggerPtr logger;
 };
 
 #endif // MAIN_H

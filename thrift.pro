@@ -5,8 +5,8 @@ QMAKE_CXXFLAGS = -std=gnu++0x -rdynamic
 TEMPLATE = app
 TARGET = thrift
 VERSION = -1.0.0
-DEPENDPATH += src/cpp src/gen-cpp
-INCLUDEPATH += src/cpp src/gen-cpp
+DEPENDPATH += src/cpp src/cpp/QtArg src/gen-cpp
+INCLUDEPATH += src/cpp src/cpp/QtArg src/gen-cpp
 
 ARCH = amd64
 JAVA_HOME = ${JAVA_HOME}
@@ -66,6 +66,19 @@ INSTALLS += target java_install java_dep_install
 
 QMAKE_CLEAN += ${TARGET}
 
+QTARG_HEADERS = \
+	src/cpp/QtArg/argconstraint.hpp \
+	src/cpp/QtArg/helpiface.hpp \
+	src/cpp/QtArg/help.hpp \
+	src/cpp/QtArg/cmdline.hpp \
+	src/cpp/QtArg/arg.hpp \
+	src/cpp/QtArg/cmdlineiface.hpp \
+	src/cpp/QtArg/cmdlinecontext.hpp \
+	src/cpp/QtArg/xorarg.hpp \
+	src/cpp/QtArg/visitor.hpp \
+	src/cpp/QtArg/exceptions.hpp \
+	src/cpp/QtArg/multiarg.hpp
+
 HEADERS += src/cpp/main.h \
 	src/gen-cpp/Hbase_types.h \
 	src/gen-cpp/Hbase_constants.h \
@@ -76,7 +89,8 @@ HEADERS += src/cpp/main.h \
 	src/cpp/HBaseClient.h \
 	src/cpp/HBaseHandler.h \
 	src/cpp/HBaseHandler_p.h \
-	src/cpp/ThriftDispatcher.h
+	src/cpp/ThriftDispatcher.h \
+	$$QTARG_HEADERS
 
 SOURCES += src/cpp/main.cpp \
 	src/gen-cpp/Hbase_constants.cpp \

@@ -25,6 +25,11 @@ int TApplication::start()
 	return -1;
 }
 
+bool TApplication::init()
+{
+	return init(QList<int>());
+}
+
 bool TApplication::init(const QList<int>& hsignals)
 {
 	if (hsignals.size() == 0)

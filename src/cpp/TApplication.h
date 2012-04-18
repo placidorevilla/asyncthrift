@@ -16,7 +16,8 @@ public:
 	int start();
 
 protected:
-	virtual bool init(const QList<int>& hsignals = QList<int>());
+	virtual bool init();
+	bool init(const QList<int>& hsignals);
 	virtual int run();
 	virtual void signal_received(int signo);
 
