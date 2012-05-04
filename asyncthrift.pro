@@ -3,7 +3,7 @@ QMAKE_CXX = g++-4.5
 QMAKE_CXXFLAGS = -std=gnu++0x -rdynamic
 
 TEMPLATE = app
-TARGET = thrift
+TARGET = asyncthrift
 VERSION = -1.0.0
 DEPENDPATH += src/cpp src/cpp/QtArg src/gen-cpp
 INCLUDEPATH += src/cpp src/cpp/QtArg src/gen-cpp
