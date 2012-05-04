@@ -58,13 +58,14 @@ bool MainApp::init()
 		return false;
 	}
 
+	_td = new ThriftDispatcher;
+
 	if (!reloadConfig())
 		return false;
 
 	if (!TApplication::init(QList<int>() << SIGINT << SIGTERM << SIGHUP))
 		return false;
 
-	_td = new ThriftDispatcher;
 	return true;
 }
 
@@ -103,6 +104,9 @@ bool MainApp::reloadConfig()
 	log4cxx::xml::DOMConfigurator::configure(qPrintable(_config_dir.absoluteFilePath(LOG4CXX_CONFIG_FILE)));
 
 	QSettings settings(_config_dir.absoluteFilePath(ASYNCTHRIFT_CONFIG_FILE), QSettings::IniFormat);
+
+	_td->setPort(settings.value("Port", 9090).toUInt());
+	_td->setWorkerThreads(settings.value("ThriftThreads", 4).toUInt());
 
 	return true;
 }

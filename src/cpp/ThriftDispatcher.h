@@ -14,6 +14,9 @@ public:
 
 	void stop();
 
+	void setPort(unsigned int port);
+	void setWorkerThreads(size_t nWorkers);
+
 protected:
 	virtual void run();
 
