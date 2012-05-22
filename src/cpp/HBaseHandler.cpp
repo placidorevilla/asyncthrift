@@ -5,13 +5,13 @@
 
 using namespace AsyncHBase;
 
-HBaseHandlerPrivate::HBaseHandlerPrivate() : hbase_client(new AsyncHBase::HBaseClient("localhost"))
+HBaseHandlerPrivate::HBaseHandlerPrivate() : hbase_client_(new AsyncHBase::HBaseClient("localhost"))
 {
 }
 
 HBaseHandlerPrivate::~HBaseHandlerPrivate()
 {
-	delete hbase_client;
+	delete hbase_client_;
 }
 
 void HBaseHandlerPrivate::handleFinished()
@@ -27,9 +27,13 @@ void HBaseHandlerPrivate::handleFinished()
 	delete watcher;
 }
 
+PendingRequest::PendingRequest(AsyncHBase::PutRequest* put_request) : QFutureWatcher<void>(), put_request(put_request)
+{
+}
+
 PendingRequest::~PendingRequest()
 {
-	delete _pr;
+	delete put_request;
 }
 
 HBaseHandler::HBaseHandler() : d(new HBaseHandlerPrivate)
@@ -57,12 +61,12 @@ void HBaseHandler::mutateRow(const Text& tableName, const Text& row, const std::
 		std::string qualifier = i->column.substr(colon_pos + 1);
 		PutRequest* pr = new PutRequest(QBA(tableName), QBA(row), QBA(family), QBA(qualifier), QBA(i->value));
 
-		pr->setBufferable(true);
-		pr->setDurable(true);
+		pr->set_bufferable(true);
+		pr->set_durable(true);
 
 		PendingRequest* watcher = new PendingRequest(pr);
 		d->connect(watcher, SIGNAL(finished()), d, SLOT(handleFinished()));
-		QFuture<void> f = d->hbase_client->put(*pr);
+		QFuture<void> f = d->hbase_client()->put(*pr);
 		watcher->setFuture(f);
 	}
 //	throw TException("Not implemented");

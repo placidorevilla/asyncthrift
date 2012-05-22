@@ -29,28 +29,28 @@ public:
 	DECLARE_HAS_PROPERTY(QByteArray, Value, value);
 	DECLARE_HAS_PROPERTY(long, Timestamp, timestamp);
 
-	HBaseRpc(const QByteArray& table, const QByteArray& key) : _table(table), _key(key) {}
+	HBaseRpc(const QByteArray& table, const QByteArray& key) : table_(table), key_(key) {}
 
-	QByteArray table() const { return _table; }
-	QByteArray key() const { return _key; }
+	QByteArray table() const { return table_; }
+	QByteArray key() const { return key_; }
 
 private:
-	QByteArray _table;
-	QByteArray _key;
+	QByteArray table_;
+	QByteArray key_;
 };
 
 class BatchableRpc : public HBaseRpc, public HBaseRpc::HasFamily, public HBaseRpc::HasTimestamp {
 public:
 	BatchableRpc(const QByteArray& table, const QByteArray& key, const QByteArray& family, long timestamp, bool bufferable = true, bool durable = true) :
-		HBaseRpc(table, key), HBaseRpc::HasFamily(family), HBaseRpc::HasTimestamp(timestamp), _bufferable(bufferable), _durable(durable)
+		HBaseRpc(table, key), HBaseRpc::HasFamily(family), HBaseRpc::HasTimestamp(timestamp), bufferable_(bufferable), durable_(durable)
 	{}
 
-	void setBufferable(bool bufferable) { _bufferable = bufferable; }
-	void setDurable(bool durable) { _durable = durable; }
+	void set_bufferable(bool bufferable) { bufferable_ = bufferable; }
+	void set_durable(bool durable) { durable_ = durable; }
 
 private:
-	bool _bufferable;
-	bool _durable;
+	bool bufferable_;
+	bool durable_;
 };
 
 class PutRequest : public JavaObject, public BatchableRpc, public HBaseRpc::HasQualifier, public HBaseRpc::HasValue {
@@ -68,7 +68,7 @@ class HBaseClient : public JavaObject {
 	DECLARE_JAVA_CLASS_NAME
 
 public:
-	HBaseClient(const QByteArray& quorum_spec, const QByteArray& base_spec = QByteArray());
+	explicit HBaseClient(const QByteArray& quorum_spec, const QByteArray& base_spec = QByteArray());
 
 	long contendedMetaLookupCount() const;
 	short getFlushInterval() const;
@@ -81,16 +81,16 @@ public:
 
 class HBaseException : public QtConcurrent::Exception {
 public:
-	HBaseException(const QString& message) : _message(message) {}
+	explicit HBaseException(const QString& message) : message_(message) {}
 	virtual ~HBaseException() throw() {}
 
-	QString message() const { return _message; }
+	QString message() const { return message_; }
 	virtual QString name() const { return QString("HBaseException"); }
 
 	virtual HBaseException* clone() const { return new HBaseException(*this); }
 	virtual void raise() const { throw *this; }
 private:
-	QString _message;
+	QString message_;
 };
 
 #define DECLARE_EXCEPTION(ename, base) \

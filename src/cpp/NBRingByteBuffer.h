@@ -59,7 +59,7 @@ inline NBRingByteBuffer::NBRingByteBuffer(size_t size) : w_commited(0), w_curren
 	size_t ps = getpagesize();
 	// Buffer should be aligned to page size or the next power of 2 of the requested size
 	size = std::max(ps, round2(size));
-	this->mask = size - 1;
+	mask = size - 1;
 
 	if ((fd = mkstemp(path)) < 0)
 		throw std::bad_alloc();
@@ -69,100 +69,100 @@ inline NBRingByteBuffer::NBRingByteBuffer(size_t size) : w_commited(0), w_curren
 	if(ftruncate(fd, size))
 		throw std::bad_alloc();
 
-	if ((this->buffer = (char*) mmap(NULL, size << 1, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)) == MAP_FAILED)
+	if ((buffer = (char*) mmap(NULL, size << 1, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)) == MAP_FAILED)
 		throw std::bad_alloc();
 
-	address = mmap(this->buffer, size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED, fd, 0);
+	address = mmap(buffer, size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED, fd, 0);
 
-	if (address != this->buffer)
+	if (address != buffer)
 		throw std::bad_alloc();
 
-	address = mmap(this->buffer + size, size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED, fd, 0);
+	address = mmap(buffer + size, size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED, fd, 0);
 
-	if (address != this->buffer + size)
+	if (address != buffer + size)
 		throw std::bad_alloc();
 
 	close(fd);
 
 	// Commit our buffer
 	for (unsigned int i = 0; i < size; i += ps)
-		*(int *)(this->buffer + i) = 0;
+		*(int *)(buffer + i) = 0;
 
-	pthread_mutex_init(&this->mutex, NULL);
-	pthread_cond_init(&this->nonempty, NULL);
-	pthread_cond_init(&this->nonfull, NULL);
+	pthread_mutex_init(&mutex, NULL);
+	pthread_cond_init(&nonempty, NULL);
+	pthread_cond_init(&nonfull, NULL);
 }
 
 inline NBRingByteBuffer::~NBRingByteBuffer()
 {
-	munmap(this->buffer, (this->mask + 1) << 1);
+	munmap(buffer, (mask + 1) << 1);
 
-	pthread_mutex_destroy(&this->mutex);
-	pthread_cond_destroy(&this->nonempty);
-	pthread_cond_destroy(&this->nonfull);
+	pthread_mutex_destroy(&mutex);
+	pthread_cond_destroy(&nonempty);
+	pthread_cond_destroy(&nonfull);
 }
 
 inline void* NBRingByteBuffer::alloc_write(size_t size, unsigned long* transaction)
 {
 	// Check size of the block to write
-	if (size > this->mask + 1 + sizeof(size_t)) {
+	if (size > mask + 1 + sizeof(size_t)) {
 		*transaction = 0;
 		return 0;
 	}
 
-	*transaction = __sync_fetch_and_add(&this->w_current, sizeof(size_t) + size);
-	while (NBUNLIKELY((*transaction + sizeof(size_t) + size - this->r_commited) & ~this->mask)) {
-		pthread_mutex_lock(&this->mutex);
-		if ((*transaction + sizeof(size_t) + size - this->r_commited) & ~this->mask)
-			pthread_cond_wait(&this->nonfull, &this->mutex);
-		pthread_mutex_unlock(&this->mutex);
+	*transaction = __sync_fetch_and_add(&w_current, sizeof(size_t) + size);
+	while (NBUNLIKELY((*transaction + sizeof(size_t) + size - r_commited) & ~mask)) {
+		pthread_mutex_lock(&mutex);
+		if ((*transaction + sizeof(size_t) + size - r_commited) & ~mask)
+			pthread_cond_wait(&nonfull, &mutex);
+		pthread_mutex_unlock(&mutex);
 	}
-	*(size_t*)(this->buffer + (*transaction & this->mask)) = size;
-	return this->buffer + ((*transaction + sizeof(size_t)) & this->mask);
+	*(size_t*)(buffer + (*transaction & mask)) = size;
+	return buffer + ((*transaction + sizeof(size_t)) & mask);
 }
 
 inline void NBRingByteBuffer::commit_write(unsigned long transaction)
 {
-	while (NBUNLIKELY(!__sync_bool_compare_and_swap(&this->w_commited, transaction, transaction + sizeof(size_t) + *(size_t*)(this->buffer + (transaction & this->mask)))))
+	while (NBUNLIKELY(!__sync_bool_compare_and_swap(&w_commited, transaction, transaction + sizeof(size_t) + *(size_t*)(buffer + (transaction & mask)))))
 		sched_yield();
-//	pthread_mutex_lock(&this->mutex);
-	pthread_cond_broadcast(&this->nonempty);
-//	pthread_mutex_unlock(&this->mutex);
+//	pthread_mutex_lock(&mutex);
+	pthread_cond_broadcast(&nonempty);
+//	pthread_mutex_unlock(&mutex);
 }
 
 inline void* NBRingByteBuffer::fetch_read(size_t* size, unsigned long* transaction)
 {
-	*transaction = this->r_current;
-	while (NBUNLIKELY(*transaction == this->w_commited)) {
-		pthread_mutex_lock(&this->mutex);
-		if (*transaction == this->w_commited)
-			pthread_cond_wait(&this->nonempty, &this->mutex);
-		pthread_mutex_unlock(&this->mutex);
+	*transaction = r_current;
+	while (NBUNLIKELY(*transaction == w_commited)) {
+		pthread_mutex_lock(&mutex);
+		if (*transaction == w_commited)
+			pthread_cond_wait(&nonempty, &mutex);
+		pthread_mutex_unlock(&mutex);
 	}
 
-	while(NBUNLIKELY(!__sync_bool_compare_and_swap(&this->r_current, *transaction, *transaction + sizeof(size_t) + *(size_t*)(this->buffer + (*transaction & this->mask))))) {
+	while(NBUNLIKELY(!__sync_bool_compare_and_swap(&r_current, *transaction, *transaction + sizeof(size_t) + *(size_t*)(buffer + (*transaction & mask))))) {
 		sched_yield();
-		*transaction = this->r_current;
+		*transaction = r_current;
 
-		while (NBUNLIKELY(*transaction == this->w_commited)) {
-			pthread_mutex_lock(&this->mutex);
-			if (*transaction == this->w_commited)
-				pthread_cond_wait(&this->nonempty, &this->mutex);
-			pthread_mutex_unlock(&this->mutex);
+		while (NBUNLIKELY(*transaction == w_commited)) {
+			pthread_mutex_lock(&mutex);
+			if (*transaction == w_commited)
+				pthread_cond_wait(&nonempty, &mutex);
+			pthread_mutex_unlock(&mutex);
 		}
 	}
 
-	*size = *(size_t*)(this->buffer + (*transaction & this->mask));
-	return this->buffer + ((*transaction + sizeof(size_t)) & this->mask);
+	*size = *(size_t*)(buffer + (*transaction & mask));
+	return buffer + ((*transaction + sizeof(size_t)) & mask);
 }
 
 inline void NBRingByteBuffer::commit_read(unsigned long transaction)
 {
-	while (NBUNLIKELY(!__sync_bool_compare_and_swap(&this->r_commited, transaction, transaction + sizeof(size_t) + *(size_t*)(this->buffer + (transaction & this->mask)))))
+	while (NBUNLIKELY(!__sync_bool_compare_and_swap(&r_commited, transaction, transaction + sizeof(size_t) + *(size_t*)(buffer + (transaction & mask)))))
 		sched_yield();
-	pthread_mutex_lock(&this->mutex);
-	pthread_cond_broadcast(&this->nonfull);
-	pthread_mutex_unlock(&this->mutex);
+	pthread_mutex_lock(&mutex);
+	pthread_cond_broadcast(&nonfull);
+	pthread_mutex_unlock(&mutex);
 }
 
 #ifdef TEST_MAIN

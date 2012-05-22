@@ -11,13 +11,13 @@ class Deferred : public QFutureInterface<void>, public JavaObject {
 	DECLARE_JAVA_CLASS_NAME
 
 public:
-	Deferred(jobject& _object);
+	Deferred(jobject& object);
 	~Deferred();
 
 	jobject call(jobject arg);
 	void connect();
 
-	static QFuture<void> newFuture(jobject& _object);
+	static QFuture<void> newFuture(jobject& object);
 private:
 	jobject cb;
 };
@@ -100,14 +100,14 @@ static void initialize()
 
 DEFINE_JAVA_CLASS_NAME(Deferred, "com/stumbleupon/async/Deferred");
 
-Deferred::Deferred(jobject& _object) : QFutureInterface<void>(QFutureInterfaceBase::Running), JavaObject()
+Deferred::Deferred(jobject& object) : QFutureInterface<void>(QFutureInterfaceBase::Running), JavaObject()
 {
-	setJObject(_object);
+	setJObject(object);
 }
 
-QFuture<void> Deferred::newFuture(jobject& _object)
+QFuture<void> Deferred::newFuture(jobject& object)
 {
-	Deferred* native = new Deferred(_object);
+	Deferred* native = new Deferred(object);
 	QFuture<void> f = native->future();
 	native->connect();
 	return f;
@@ -117,9 +117,9 @@ void Deferred::connect()
 {
 	JNIEnv* env = getJNIEnv();
 
-	jobject _cb = constructNewObjectOfClass(env, NULL, generic_callback_class_name, "()V");
-	cb = env->NewGlobalRef(_cb);
-	env->DeleteLocalRef(_cb);
+	jobject cb = constructNewObjectOfClass(env, NULL, generic_callback_class_name, "()V");
+	cb = env->NewGlobalRef(cb);
+	env->DeleteLocalRef(cb);
 	jclass cls = env->FindClass(generic_callback_class_name);
 	jfieldID fid = env->GetFieldID(cls, "native_object", "J");
 	env->SetLongField(cb, fid, (long) this);

@@ -5,7 +5,7 @@
 
 DEFINE_JAVA_CLASS_NAME(JavaObject, "");
 
-JavaObject::JavaObject(jobject _object) : object(_object)
+JavaObject::JavaObject(jobject object) : object(object)
 {
 }
 
@@ -15,18 +15,18 @@ JavaObject::~JavaObject()
 		getJNIEnv()->DeleteGlobalRef(object);
 }
 
-void JavaObject::setJObjectLocal(jobject _object)
+void JavaObject::setJObjectLocal(jobject object)
 {
-	setJObject(_object);
-	getJNIEnv()->DeleteLocalRef(_object);
+	setJObject(object);
+	getJNIEnv()->DeleteLocalRef(object);
 }
 
-void JavaObject::setJObject(jobject _object)
+void JavaObject::setJObject(jobject object)
 {
 	// TODO: check class_name of jobject
 	if (object)
 		getJNIEnv()->DeleteGlobalRef(object);
-	object = getJNIEnv()->NewGlobalRef(_object);
+	object = getJNIEnv()->NewGlobalRef(object);
 }
 
 jvalue JavaObject::invokeInstanceMethod(const char* name, const char* signature, ...) const
@@ -127,11 +127,11 @@ JByteArray::~JByteArray()
 		free(buffer);
 }
 
-JByteArray* JByteArray::fromJObject(jobject _object)
+JByteArray* JByteArray::fromJObject(jobject object)
 {
 	// TODO: check object type
 	JByteArray* a = new JByteArray();
-	a->array = static_cast<jbyteArray>(_object);
+	a->array = static_cast<jbyteArray>(object);
 	return a;
 }
 

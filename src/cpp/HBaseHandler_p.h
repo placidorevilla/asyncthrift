@@ -8,29 +8,34 @@
 
 class HBaseHandlerPrivate : public QObject {
 	Q_OBJECT
-	friend class HBaseHandler;
+	Q_DISABLE_COPY(HBaseHandlerPrivate)
+
+//	friend class HBaseHandler;
 
 public:
 	HBaseHandlerPrivate();
 	virtual ~HBaseHandlerPrivate();
 
+	AsyncHBase::HBaseClient* hbase_client() const { return hbase_client_; }
+
 public slots:
 	void handleFinished();
 
 private:
-	AsyncHBase::HBaseClient* hbase_client;
+	AsyncHBase::HBaseClient* hbase_client_;
 };
 
 class PendingRequest : public QFutureWatcher<void>
 {
 	Q_OBJECT
+	Q_DISABLE_COPY(PendingRequest)
 
 public:
-	PendingRequest(AsyncHBase::PutRequest* pr) : QFutureWatcher<void>(), _pr(pr) {}
+	explicit PendingRequest(AsyncHBase::PutRequest* put_request);
 	~PendingRequest();
 
 private:
-	AsyncHBase::PutRequest* _pr;
+	AsyncHBase::PutRequest* put_request;
 };
 
 #endif // HBASEHANDLER_P_H

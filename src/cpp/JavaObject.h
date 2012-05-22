@@ -19,14 +19,14 @@ class JavaObject {
 	DECLARE_JAVA_CLASS_NAME
 
 public:
-	JavaObject(jobject _object = 0);
+	JavaObject(jobject object = 0);
 	~JavaObject();
 
 	jobject getJObject() const { return object; }
 	JNIEnv* getJNIEnv() const { return ::getJNIEnv(); }
 
-	void setJObjectLocal(jobject _object);
-	void setJObject(jobject _object);
+	void setJObjectLocal(jobject object);
+	void setJObject(jobject object);
 
 	jvalue invokeInstanceMethod(const char* name, const char* signature, ...) const;
 
@@ -58,7 +58,7 @@ public:
 	jbyteArray getJArray() const { return array; }
 	const char* c_str() const;
 
-	static JByteArray* fromJObject(jobject _object);
+	static JByteArray* fromJObject(jobject object);
 
 private:
 	JByteArray();

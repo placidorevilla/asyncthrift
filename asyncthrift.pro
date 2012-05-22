@@ -79,7 +79,7 @@ QTARG_HEADERS = \
 	src/cpp/QtArg/exceptions.hpp \
 	src/cpp/QtArg/multiarg.hpp
 
-HEADERS += src/cpp/main.h \
+HEADERS += src/cpp/AsyncThrift.h \
 	src/gen-cpp/Hbase_types.h \
 	src/gen-cpp/Hbase_constants.h \
 	src/gen-cpp/Hbase.h \
@@ -90,9 +90,11 @@ HEADERS += src/cpp/main.h \
 	src/cpp/HBaseHandler.h \
 	src/cpp/HBaseHandler_p.h \
 	src/cpp/ThriftDispatcher.h \
+	src/cpp/LogStorageManager.h \
+	src/cpp/LogStorageManager_p.h \
 	$$QTARG_HEADERS
 
-SOURCES += src/cpp/main.cpp \
+SOURCES += src/cpp/AsyncThrift.cpp \
 	src/gen-cpp/Hbase_constants.cpp \
 	src/gen-cpp/Hbase.cpp \
 	src/gen-cpp/Hbase_types.cpp \
@@ -101,5 +103,6 @@ SOURCES += src/cpp/main.cpp \
 	src/cpp/JavaObject.cpp \
 	src/cpp/HBaseClient.cpp \
 	src/cpp/HBaseHandler.cpp \
+	src/cpp/LogStorageManager.cpp \
 	src/cpp/ThriftDispatcher.cpp
 

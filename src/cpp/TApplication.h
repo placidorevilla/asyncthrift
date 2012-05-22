@@ -25,7 +25,7 @@ private slots:
 	void daemon_signal_handler();
 
 private:
-	QSocketNotifier *_daemon_signal_notifier;
+	QSocketNotifier *daemon_signal_notifier;
 };
 
 #endif // TAPPLICATION_H

@@ -9,6 +9,8 @@
 #include <concurrency/PosixThreadFactory.h>
 
 #include "HBaseHandler.h"
+#include "NBRingByteBuffer.h"
+#include "LogStorageManager.h"
 
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
@@ -19,39 +21,50 @@ using boost::shared_ptr;
 
 using namespace apache::hadoop::hbase::thrift;
 
+log4cxx::LoggerPtr ThriftDispatcher::logger(log4cxx::Logger::getLogger(ThriftDispatcher::staticMetaObject.className()));
+
 class ThriftDispatcherPrivate {
 	friend class ThriftDispatcher;
 
 public:
-	ThriftDispatcherPrivate() : _running(false), _workerThreads(4), _port(9090) {}
+	ThriftDispatcherPrivate() : running_(false), num_worker_threads_(4), port_(9090), _buffer(NBRingByteBuffer(64 * 1024 * 1024)) {}
 
 	void run()
 	{
 		shared_ptr<HBaseHandler> handler(new HBaseHandler());
 		shared_ptr<TProcessor> processor(new HbaseProcessor(handler));
 		shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
-		shared_ptr<ThreadManager> thread_manager = ThreadManager::newSimpleThreadManager(_workerThreads);
+		shared_ptr<ThreadManager> thread_manager = ThreadManager::newSimpleThreadManager(num_worker_threads());
 
 		shared_ptr<PosixThreadFactory> thread_factory(new PosixThreadFactory());
 		thread_manager->threadFactory(thread_factory);
 		thread_manager->start();
 
-		_server = shared_ptr<TNonblockingServer>(new TNonblockingServer(processor, protocolFactory, _port, thread_manager));
-		_running = true;
-		_server->serve();
-		_running = false;
+		server_ = shared_ptr<TNonblockingServer>(new TNonblockingServer(processor, protocolFactory, port(), thread_manager));
+		running_ = true;
+		server_->serve();
+		running_ = false;
 	}
 
 	void stop()
 	{
-		_server->stop();
+		server()->stop();
 	}
 
+	bool running() const { return running_; }
+	size_t num_worker_threads() const { return num_worker_threads_; }
+	void set_num_worker_threads(size_t num_worker_threads) { num_worker_threads_ = num_worker_threads; }
+	unsigned int port() const { return port_; }
+	void set_port(unsigned int port) { port_ = port; }
+	shared_ptr<TNonblockingServer> server() const { return server_; }
+
 private:
-	bool _running;
-	size_t _workerThreads;
-	unsigned int _port;
-	shared_ptr<TNonblockingServer> _server;
+	bool running_;
+	size_t num_worker_threads_;
+	unsigned int port_;
+	shared_ptr<TNonblockingServer> server_;
+	NBRingByteBuffer _buffer;
+	LogStorageManager _ls_manager;
 };
 
 ThriftDispatcher::ThriftDispatcher(QObject* parent) : QThread(parent), d(new ThriftDispatcherPrivate)
@@ -73,25 +86,39 @@ void ThriftDispatcher::stop()
 	d->stop();
 }
 
-void ThriftDispatcher::setPort(unsigned int port)
+void ThriftDispatcher::set_port(unsigned int port)
 {
-	if (d->_running && port != d->_port) {
-		// TODO: warning, cannot change port while running
-	}
+	if (d->running() && port != d->port())
+		LOG4CXX_WARN(logger, "Cannot change the binding port while running");
 
-	d->_port = port;
+	d->set_port(port);
 }
 
-void ThriftDispatcher::setWorkerThreads(size_t nWorkers)
+void ThriftDispatcher::set_num_worker_threads(size_t num_worker_threads)
 {
-	d->_workerThreads = nWorkers;
+	d->set_num_worker_threads(num_worker_threads);
 
-	if (d->_running) {
-		shared_ptr<ThreadManager> thread_manager = d->_server->getThreadManager();
+	if (d->running()) {
+		shared_ptr<ThreadManager> thread_manager = d->server()->getThreadManager();
 		size_t current_workers = thread_manager->workerCount();
-		if (nWorkers < current_workers)
-			thread_manager->removeWorker(current_workers - nWorkers);
+		if (num_worker_threads < current_workers)
+			thread_manager->removeWorker(current_workers - num_worker_threads);
 		else
-			thread_manager->addWorker(nWorkers - current_workers);
+			thread_manager->addWorker(num_worker_threads - current_workers);
 	}
+}
+
+void ThriftDispatcher::set_buffer_size(size_t buffer_size)
+{
+	// TODO: implement
+}
+
+void ThriftDispatcher::configure_log_storage(unsigned int max_size, unsigned int period, const QStringList& log_dirs)
+{
+	d->_ls_manager.configure(max_size, period, log_dirs);
+}
+
+NBRingByteBuffer* ThriftDispatcher::buffer()
+{
+	return &d->_buffer;
 }
