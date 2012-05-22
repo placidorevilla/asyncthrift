@@ -3,10 +3,13 @@
 
 #include "AsyncThrift.h"
 #include "ThriftDispatcher.h"
+#include "NBRingByteBuffer.h"
 
 #include <QSettings>
 #include <QDir>
 #include <QMutexLocker>
+
+static const int RINGBUFFER_READ_TIMEOUT = 500;
 
 LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this))
 {
@@ -24,16 +27,6 @@ bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_p
 	d->set_sync_period(sync_period);
 
 	return true;
-}
-
-unsigned int LogStorageManager::max_log_size() const
-{
-	return d->max_log_size();
-}
-
-unsigned int LogStorageManager::sync_period() const
-{
-	return d->sync_period();
 }
 
 LogStorageManagerPrivate::LogStorageManagerPrivate(LogStorageManager* manager) : QObject(manager), manager(manager), max_log_size_(0)
@@ -111,7 +104,8 @@ void LogStorage::schedule_sync()
 void LogStorage::sync()
 {
 	QMutexLocker locker(&file_guard);
-	printf("sync! %p\n", (void*)pthread_self());
+//	printf("sync! %p\n", (void*)pthread_self());
+	fdatasync(current_log.handle());
 }
 
 LogSyncThread::LogSyncThread(LogStorage* storage) : storage(storage)
@@ -129,9 +123,8 @@ void LogSyncThread::sync()
 	storage->sync();
 }
 
-LogWriteThread::LogWriteThread(LogStorage* storage) : storage(storage)
+LogWriteThread::LogWriteThread(LogStorage* storage) : quitNow(false), buffer(AsyncThrift::instance()->dispatcher()->buffer()), storage(storage)
 {
-	buffer = AsyncThrift::instance()->dispatcher()->buffer();
 	start();
 	moveToThread(this);
 }
@@ -142,11 +135,25 @@ LogWriteThread::~LogWriteThread()
 
 void LogWriteThread::run()
 {
-	exec();
+	size_t request_size;
+	unsigned long transaction;
+	void* request;
+
+	while (true) {
+		request = buffer->fetch_read(&request_size, &transaction, RINGBUFFER_READ_TIMEOUT);
+		if (!request) {
+			QCoreApplication::processEvents();
+			if (quitNow)
+				return;
+			continue;
+		}
+		// TODO: write operation to disk
+		buffer->commit_read(transaction);
+	}
 }
 
 void LogWriteThread::quit()
 {
-	QThread::quit();
+	quitNow = true;
 }
 

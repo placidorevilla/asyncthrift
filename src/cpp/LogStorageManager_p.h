@@ -25,6 +25,7 @@ protected:
 	virtual void run();
 
 private:
+	bool quitNow;
 	NBRingByteBuffer* buffer;
 	LogStorage* storage;
 };

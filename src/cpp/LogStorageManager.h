@@ -15,9 +15,6 @@ public:
 	explicit LogStorageManager(QObject* parent = 0);
 	~LogStorageManager();
 
-	unsigned int max_log_size() const;
-	unsigned int sync_period() const;
-
 	bool configure(unsigned int max_log_size, unsigned int sync_period, const QStringList& dirs);
 
 private:

@@ -30,13 +30,16 @@ public:
 	void* alloc_write(size_t size, unsigned long* transaction);
 	void commit_write(unsigned long transaction);
 
-	void* fetch_read(size_t* size, unsigned long* transaction);
+	void* fetch_read(size_t* size, unsigned long* transaction, int timeout = -1);
 	void commit_read(unsigned long transaction);
 
 	void flush();
 	void resize(size_t size);
 
 private:
+	void wait_nonfull(size_t size, unsigned long* transaction);
+	bool wait_nonempty(unsigned long* transaction, const struct timespec* abs_timeout);
+
 	char* buffer;
 	unsigned long mask;
 
@@ -102,14 +105,8 @@ inline NBRingByteBuffer::~NBRingByteBuffer()
 	pthread_cond_destroy(&nonfull);
 }
 
-inline void* NBRingByteBuffer::alloc_write(size_t size, unsigned long* transaction)
+inline void NBRingByteBuffer::wait_nonfull(size_t size, unsigned long* transaction)
 {
-	// Check size of the block to write
-	if (size > mask + 1 + sizeof(size_t)) {
-		*transaction = 0;
-		return 0;
-	}
-
 	*transaction = __sync_fetch_and_add(&w_current, sizeof(size_t) + size);
 	while (NBUNLIKELY((*transaction + sizeof(size_t) + size - r_commited) & ~mask)) {
 		pthread_mutex_lock(&mutex);
@@ -117,6 +114,16 @@ inline void* NBRingByteBuffer::alloc_write(size_t size, unsigned long* transacti
 			pthread_cond_wait(&nonfull, &mutex);
 		pthread_mutex_unlock(&mutex);
 	}
+}
+
+inline void* NBRingByteBuffer::alloc_write(size_t size, unsigned long* transaction)
+{
+	// Check size of the block to write
+	if (size > mask + 1 + sizeof(size_t))
+		return NULL;
+
+	wait_nonfull(size, transaction);
+
 	*(size_t*)(buffer + (*transaction & mask)) = size;
 	return buffer + ((*transaction + sizeof(size_t)) & mask);
 }
@@ -130,26 +137,50 @@ inline void NBRingByteBuffer::commit_write(unsigned long transaction)
 //	pthread_mutex_unlock(&mutex);
 }
 
-inline void* NBRingByteBuffer::fetch_read(size_t* size, unsigned long* transaction)
+inline bool NBRingByteBuffer::wait_nonempty(unsigned long* transaction, const struct timespec* abs_timeout)
 {
 	*transaction = r_current;
+
 	while (NBUNLIKELY(*transaction == w_commited)) {
 		pthread_mutex_lock(&mutex);
-		if (*transaction == w_commited)
-			pthread_cond_wait(&nonempty, &mutex);
+		if (*transaction == w_commited) {
+			if (abs_timeout) {
+				if (pthread_cond_timedwait(&nonempty, &mutex, abs_timeout) != 0) {
+					pthread_mutex_unlock(&mutex);
+					return false;
+				}
+			} else {
+				pthread_cond_wait(&nonempty, &mutex);
+			}
+		}
 		pthread_mutex_unlock(&mutex);
 	}
 
+	return true;
+}
+
+inline void* NBRingByteBuffer::fetch_read(size_t* size, unsigned long* transaction, int timeout)
+{
+	struct timespec abs_timeout, *p_abs_timeout = NULL;
+
+	if (timeout >= 0) {
+		clock_gettime(CLOCK_REALTIME, &abs_timeout);
+		p_abs_timeout = &abs_timeout;
+		abs_timeout.tv_nsec += (timeout % 1000) * 1000000;
+		if (abs_timeout.tv_nsec > 1000000000) {
+			abs_timeout.tv_nsec -= 1000000000;
+			abs_timeout.tv_sec++;
+		}
+		abs_timeout.tv_sec += timeout / 1000;
+	}
+
+	if (!wait_nonempty(transaction, p_abs_timeout))
+		return NULL;
+
 	while(NBUNLIKELY(!__sync_bool_compare_and_swap(&r_current, *transaction, *transaction + sizeof(size_t) + *(size_t*)(buffer + (*transaction & mask))))) {
 		sched_yield();
-		*transaction = r_current;
-
-		while (NBUNLIKELY(*transaction == w_commited)) {
-			pthread_mutex_lock(&mutex);
-			if (*transaction == w_commited)
-				pthread_cond_wait(&nonempty, &mutex);
-			pthread_mutex_unlock(&mutex);
-		}
+		if (!wait_nonempty(transaction, p_abs_timeout))
+			return NULL;
 	}
 
 	*size = *(size_t*)(buffer + (*transaction & mask));
@@ -189,6 +220,8 @@ protected:
 		while (true) {
 			i = qrand() % MAX_SIZE + MAX_SIZE;
 			buf = (unsigned long*)rb->alloc_write(i * sizeof(unsigned long), &tx);
+			if (!buf)
+				return;
 			__sync_fetch_and_add(&written_bytes, i * sizeof(unsigned long));
 			csum = 0;
 			for (j = i - 1; j; j--) {
