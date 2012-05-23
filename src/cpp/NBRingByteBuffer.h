@@ -40,6 +40,9 @@ private:
 	void wait_nonfull(size_t size, unsigned long* transaction);
 	bool wait_nonempty(unsigned long* transaction, const struct timespec* abs_timeout);
 
+	void allocate(size_t size);
+	void deallocate();
+
 	char* buffer;
 	unsigned long mask;
 
@@ -51,9 +54,36 @@ private:
 	pthread_mutex_t mutex;
 	pthread_cond_t nonempty;
 	pthread_cond_t nonfull;
+
+	pthread_rwlock_t buffer_lock;
 };
 
 inline NBRingByteBuffer::NBRingByteBuffer(size_t size) : w_commited(0), w_current(0), r_commited(0), r_current(0)
+{
+	allocate(size);
+
+	pthread_mutex_init(&mutex, NULL);
+	pthread_cond_init(&nonempty, NULL);
+	pthread_cond_init(&nonfull, NULL);
+
+	pthread_rwlockattr_t buffer_lock_attr;
+	pthread_rwlockattr_init(&buffer_lock_attr);
+	pthread_rwlockattr_setkind_np(&buffer_lock_attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
+	pthread_rwlock_init(&buffer_lock, &buffer_lock_attr);
+	pthread_rwlockattr_destroy(&buffer_lock_attr);
+}
+
+inline NBRingByteBuffer::~NBRingByteBuffer()
+{
+	deallocate();
+
+	pthread_mutex_destroy(&mutex);
+	pthread_cond_destroy(&nonempty);
+	pthread_cond_destroy(&nonfull);
+	pthread_rwlock_destroy(&buffer_lock);
+}
+
+inline void NBRingByteBuffer::allocate(size_t size)
 {
 	char path[] = "/dev/shm/ring-buffer-XXXXXX";
 	int fd;
@@ -90,19 +120,11 @@ inline NBRingByteBuffer::NBRingByteBuffer(size_t size) : w_commited(0), w_curren
 	// Commit our buffer
 	for (unsigned int i = 0; i < size; i += ps)
 		*(int *)(buffer + i) = 0;
-
-	pthread_mutex_init(&mutex, NULL);
-	pthread_cond_init(&nonempty, NULL);
-	pthread_cond_init(&nonfull, NULL);
 }
 
-inline NBRingByteBuffer::~NBRingByteBuffer()
+inline void NBRingByteBuffer::deallocate()
 {
 	munmap(buffer, (mask + 1) << 1);
-
-	pthread_mutex_destroy(&mutex);
-	pthread_cond_destroy(&nonempty);
-	pthread_cond_destroy(&nonfull);
 }
 
 inline void NBRingByteBuffer::wait_nonfull(size_t size, unsigned long* transaction)
@@ -122,6 +144,8 @@ inline void* NBRingByteBuffer::alloc_write(size_t size, unsigned long* transacti
 	if (size > mask + 1 + sizeof(size_t))
 		return NULL;
 
+	pthread_rwlock_rdlock(&buffer_lock);
+
 	wait_nonfull(size, transaction);
 
 	*(size_t*)(buffer + (*transaction & mask)) = size;
@@ -135,6 +159,8 @@ inline void NBRingByteBuffer::commit_write(unsigned long transaction)
 //	pthread_mutex_lock(&mutex);
 	pthread_cond_broadcast(&nonempty);
 //	pthread_mutex_unlock(&mutex);
+
+	pthread_rwlock_unlock(&buffer_lock);
 }
 
 inline bool NBRingByteBuffer::wait_nonempty(unsigned long* transaction, const struct timespec* abs_timeout)
@@ -177,11 +203,15 @@ inline void* NBRingByteBuffer::fetch_read(size_t* size, unsigned long* transacti
 	if (!wait_nonempty(transaction, p_abs_timeout))
 		return NULL;
 
+	pthread_mutex_lock(&mutex);
 	while(NBUNLIKELY(!__sync_bool_compare_and_swap(&r_current, *transaction, *transaction + sizeof(size_t) + *(size_t*)(buffer + (*transaction & mask))))) {
+		pthread_mutex_unlock(&mutex);
 		sched_yield();
 		if (!wait_nonempty(transaction, p_abs_timeout))
 			return NULL;
+		pthread_mutex_lock(&mutex);
 	}
+	pthread_mutex_unlock(&mutex);
 
 	*size = *(size_t*)(buffer + (*transaction & mask));
 	return buffer + ((*transaction + sizeof(size_t)) & mask);
@@ -194,6 +224,22 @@ inline void NBRingByteBuffer::commit_read(unsigned long transaction)
 	pthread_mutex_lock(&mutex);
 	pthread_cond_broadcast(&nonfull);
 	pthread_mutex_unlock(&mutex);
+}
+
+void NBRingByteBuffer::resize(size_t size)
+{
+	pthread_rwlock_wrlock(&buffer_lock);
+	while (!__sync_bool_compare_and_swap(&r_commited, w_commited, w_commited))
+		sched_yield();
+
+	pthread_mutex_lock(&mutex);
+
+	deallocate();
+	allocate(size);
+
+	w_commited = w_current = r_commited = r_current = 0;
+	pthread_mutex_unlock(&mutex);
+	pthread_rwlock_unlock(&buffer_lock);
 }
 
 #ifdef TEST_MAIN
@@ -272,11 +318,13 @@ int main()
 	}
 
 	while (true) {
-		sleep(1);
-		fprintf(stderr, "written: %ld (%lu MB), read: %ld\n", written_items - last_written, (written_bytes - last_written_bytes) >> 20, read_items - last_read);
+		usleep(1000 * 1000);
+		int new_buf_size = (BUF_SIZE * (qrand() % 10)) / 10 + 1;
+		fprintf(stderr, "written: %ld (%lu MB), read: %ld (new buf size: %d MB)\n", written_items - last_written, (written_bytes - last_written_bytes) >> 20, read_items - last_read, new_buf_size);
 		last_written = written_items;
 		last_read = read_items;
 		last_written_bytes = written_bytes;
+		rb->resize(new_buf_size * 1024 * 1024);
 	}
 
 	delete rb;

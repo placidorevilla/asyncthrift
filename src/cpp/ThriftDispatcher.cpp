@@ -56,6 +56,7 @@ public:
 	void set_num_worker_threads(size_t num_worker_threads) { num_worker_threads_ = num_worker_threads; }
 	unsigned int port() const { return port_; }
 	void set_port(unsigned int port) { port_ = port; }
+	NBRingByteBuffer* buffer() { return &_buffer; }
 	shared_ptr<TNonblockingServer> server() const { return server_; }
 
 private:
@@ -110,7 +111,7 @@ void ThriftDispatcher::set_num_worker_threads(size_t num_worker_threads)
 
 void ThriftDispatcher::set_buffer_size(size_t buffer_size)
 {
-	// TODO: implement
+	d->buffer()->resize(buffer_size * 1024 * 1024);
 }
 
 void ThriftDispatcher::configure_log_storage(unsigned int max_size, unsigned int period, const QStringList& log_dirs)
@@ -120,5 +121,5 @@ void ThriftDispatcher::configure_log_storage(unsigned int max_size, unsigned int
 
 NBRingByteBuffer* ThriftDispatcher::buffer()
 {
-	return &d->_buffer;
+	return d->buffer();
 }

@@ -107,6 +107,7 @@ bool AsyncThrift::reloadConfig()
 
 	dispatcher()->set_port(settings.value("Port", 9090).toUInt());
 	dispatcher()->set_num_worker_threads(settings.value("ThriftThreads", 4).toUInt());
+	dispatcher()->set_buffer_size(settings.value("BufferSize", 64).toUInt());
 
 	settings.beginGroup("LogStorage");
 	QList<QString> log_dirs;
