@@ -15,6 +15,8 @@
 #define NBLIKELY(expr)    __builtin_expect(!!(expr), true)
 #define NBUNLIKELY(expr)  __builtin_expect(!!(expr), false)
 
+// TODO: implement alternative locking with no spin-locks
+
 inline unsigned long round2(unsigned long x) {
 	unsigned long tmp = 1;
 	while (tmp < x)

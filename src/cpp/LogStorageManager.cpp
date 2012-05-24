@@ -54,6 +54,7 @@ void LogStorageManagerPrivate::create_storages(const QStringList& dirs)
 		return;
 	}
 
+	// TODO: Check that the dirs are not repeated
 	foreach(const QString& dir, dirs) {
 		LogStorage* storage = new LogStorage(manager, dir);
 		storages.append(storage);
@@ -147,6 +148,7 @@ void LogWriteThread::run()
 	size_t request_size;
 	unsigned long transaction;
 	void* request;
+	char local_buffer[4096];
 
 	while (true) {
 		request = buffer->fetch_read(&request_size, &transaction, RINGBUFFER_READ_TIMEOUT);
@@ -158,9 +160,18 @@ void LogWriteThread::run()
 			}
 			continue;
 		}
+		
+		if (request_size <= sizeof(local_buffer)) {
+			memcpy(local_buffer, request, request_size);
+			request = local_buffer;
+			buffer->commit_read(transaction);
+		}
+
 		// TODO: write operation to disk
+		write(storage->handle(), request, request_size);
 		LOG4CXX_DEBUG(logger, "Log transaction");
-		buffer->commit_read(transaction);
+		if (request_size > sizeof(local_buffer))
+			buffer->commit_read(transaction);
 	}
 }
 

@@ -1,6 +1,10 @@
 QMAKE_CC = gcc-4.5
 QMAKE_CXX = g++-4.5
 QMAKE_CXXFLAGS = -std=gnu++0x -rdynamic
+#QMAKE_CXXFLAGS += -O3 -march=native -fomit-frame-pointer -mfpmath=sse
+#QMAKE_CFLAGS += -pg
+#QMAKE_CXXFLAGS += -pg
+#QMAKE_LFLAGS = -pg
 
 TEMPLATE = app
 TARGET = asyncthrift

@@ -1,39 +1,19 @@
 #include "HBaseHandler.h"
 #include "HBaseHandler_p.h"
 
-#include "HBaseClient.h"
+#include "AsyncThrift.h"
+#include "ThriftDispatcher.h"
+#include "NBRingByteBuffer.h"
 
-using namespace AsyncHBase;
+log4cxx::LoggerPtr HBaseHandler::logger(log4cxx::Logger::getLogger(HBaseHandler::staticMetaObject.className()));
+log4cxx::LoggerPtr HBaseHandlerPrivate::logger(log4cxx::Logger::getLogger(HBaseHandler::staticMetaObject.className()));
 
-HBaseHandlerPrivate::HBaseHandlerPrivate() : hbase_client_(new AsyncHBase::HBaseClient("localhost"))
+HBaseHandlerPrivate::HBaseHandlerPrivate() : buffer_(AsyncThrift::instance()->dispatcher()->buffer())
 {
 }
 
 HBaseHandlerPrivate::~HBaseHandlerPrivate()
 {
-	delete hbase_client_;
-}
-
-void HBaseHandlerPrivate::handleFinished()
-{
-	PendingRequest* watcher = qobject_cast<PendingRequest*>(sender());
-	try {
-		printf("FINISHED\n");
-		watcher->waitForFinished();
-	} catch (HBaseException& e) {
-		printf("E: [%s] %s\n", qPrintable(e.name()), qPrintable(e.message()));
-	}
-
-	delete watcher;
-}
-
-PendingRequest::PendingRequest(AsyncHBase::PutRequest* put_request) : QFutureWatcher<void>(), put_request(put_request)
-{
-}
-
-PendingRequest::~PendingRequest()
-{
-	delete put_request;
 }
 
 HBaseHandler::HBaseHandler() : d(new HBaseHandlerPrivate)
@@ -45,30 +25,15 @@ HBaseHandler::~HBaseHandler()
 	delete d;
 }
 
-static QByteArray QBA(const std::string& s)
-{
-	return QByteArray(s.data(), s.size());
-}
-
 void HBaseHandler::mutateRow(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations) {
-//	printf("handler:%p, thread: %p\n", this, (void*)pthread_self());
-	for(std::vector<Mutation>::const_iterator i = mutations.begin(); i != mutations.end(); i++) {
-//		printf("mutation\n");
-		size_t colon_pos = i->column.find_first_of(':');
-		if (colon_pos == std::string::npos)
-			throw TException("Invalid column");
-		std::string family = i->column.substr(0, colon_pos);
-		std::string qualifier = i->column.substr(colon_pos + 1);
-		PutRequest* pr = new PutRequest(QBA(tableName), QBA(row), QBA(family), QBA(qualifier), QBA(i->value));
+	unsigned long tnx;
 
-		pr->set_bufferable(true);
-		pr->set_durable(true);
-
-		PendingRequest* watcher = new PendingRequest(pr);
-		d->connect(watcher, SIGNAL(finished()), d, SLOT(handleFinished()));
-		QFuture<void> f = d->hbase_client()->put(*pr);
-		watcher->setFuture(f);
+	void* buffer = d->buffer()->alloc_write(sizeof(unsigned long), &tnx);
+	if (!buffer) {
+		LOG4CXX_WARN(logger, "Invalid state for ring buffer");
+		return;
 	}
-//	throw TException("Not implemented");
+	*((unsigned long*)buffer) = 0xDEADBEEF;
+	d->buffer()->commit_write(tnx);
 	return;
 }

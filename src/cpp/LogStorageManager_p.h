@@ -65,6 +65,8 @@ public:
 	void schedule_sync();
 	void sync();
 
+	int handle() const { return current_log.handle(); }
+
 signals:
 	void signal_sync();
 

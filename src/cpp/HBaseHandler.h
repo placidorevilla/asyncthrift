@@ -5,12 +5,19 @@
 
 #include <Thrift.h>
 
+#include <log4cxx/logger.h>
+
+#include <QObject>
+
 using namespace apache::thrift;
 using namespace apache::hadoop::hbase::thrift;
 
 class HBaseHandlerPrivate;
 
-class HBaseHandler : virtual public HbaseIf {
+class HBaseHandler : public QObject, virtual public HbaseIf {
+	Q_OBJECT
+	Q_DISABLE_COPY(HBaseHandler)
+
 public:
 	HBaseHandler();
 	virtual ~HBaseHandler();
@@ -173,6 +180,8 @@ public:
 	}
 private:
 	HBaseHandlerPrivate* d;
+
+	static log4cxx::LoggerPtr logger;
 };
 
 #endif // HBASEHANDLER_H
