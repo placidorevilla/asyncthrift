@@ -85,6 +85,7 @@ void ThriftDispatcher::run()
 void ThriftDispatcher::stop()
 {
 	d->stop();
+	d->buffer()->flush();
 }
 
 void ThriftDispatcher::set_port(unsigned int port)

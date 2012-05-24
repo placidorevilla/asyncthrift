@@ -9,6 +9,12 @@
 #include <QDir>
 #include <QMutexLocker>
 
+log4cxx::LoggerPtr LogStorageManager::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
+log4cxx::LoggerPtr LogStorageManagerPrivate::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
+log4cxx::LoggerPtr LogStorage::logger(log4cxx::Logger::getLogger(LogStorage::staticMetaObject.className()));
+log4cxx::LoggerPtr LogWriteThread::logger(log4cxx::Logger::getLogger(LogWriteThread::staticMetaObject.className()));
+log4cxx::LoggerPtr LogSyncThread::logger(log4cxx::Logger::getLogger(LogSyncThread::staticMetaObject.className()));
+
 static const int RINGBUFFER_READ_TIMEOUT = 500;
 
 LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this))
@@ -22,6 +28,8 @@ LogStorageManager::~LogStorageManager()
 
 bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_period, const QStringList& dirs)
 {
+	LOG4CXX_DEBUG(logger, "Configuring storages");
+
 	d->create_storages(dirs);
 	d->set_max_log_size(max_log_size);
 	d->set_sync_period(sync_period);
@@ -40,8 +48,9 @@ LogStorageManagerPrivate::~LogStorageManagerPrivate()
 
 void LogStorageManagerPrivate::create_storages(const QStringList& dirs)
 {
+	// TODO: Check if the storages definition has changed actually
 	if (storages.size() != 0) {
-		// TODO: Warn, cannot reconfigure storages while running
+		LOG4CXX_WARN(logger, "Cannot reconfigure storages while running");
 		return;
 	}
 
@@ -104,7 +113,7 @@ void LogStorage::schedule_sync()
 void LogStorage::sync()
 {
 	QMutexLocker locker(&file_guard);
-//	printf("sync! %p\n", (void*)pthread_self());
+	LOG4CXX_DEBUG(logger, "Syncing storage");
 	fdatasync(current_log.handle());
 }
 
@@ -143,11 +152,14 @@ void LogWriteThread::run()
 		request = buffer->fetch_read(&request_size, &transaction, RINGBUFFER_READ_TIMEOUT);
 		if (!request) {
 			QCoreApplication::processEvents();
-			if (quitNow)
+			if (quitNow) {
+				LOG4CXX_DEBUG(logger, "Exiting write thread");
 				return;
+			}
 			continue;
 		}
 		// TODO: write operation to disk
+		LOG4CXX_DEBUG(logger, "Log transaction");
 		buffer->commit_read(transaction);
 	}
 }

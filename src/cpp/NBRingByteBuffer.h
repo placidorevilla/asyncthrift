@@ -40,6 +40,9 @@ private:
 	void wait_nonfull(size_t size, unsigned long* transaction);
 	bool wait_nonempty(unsigned long* transaction, const struct timespec* abs_timeout);
 
+	void flush_lock();
+	void flush_unlock();
+
 	void allocate(size_t size);
 	void deallocate();
 
@@ -226,12 +229,27 @@ inline void NBRingByteBuffer::commit_read(unsigned long transaction)
 	pthread_mutex_unlock(&mutex);
 }
 
-void NBRingByteBuffer::resize(size_t size)
+inline void NBRingByteBuffer::flush_lock()
 {
 	pthread_rwlock_wrlock(&buffer_lock);
 	while (!__sync_bool_compare_and_swap(&r_commited, w_commited, w_commited))
 		sched_yield();
+}
 
+inline void NBRingByteBuffer::flush_unlock()
+{
+	pthread_rwlock_unlock(&buffer_lock);
+}
+
+inline void NBRingByteBuffer::flush()
+{
+	flush_lock();
+	flush_unlock();
+}
+
+inline void NBRingByteBuffer::resize(size_t size)
+{
+	flush_lock();
 	pthread_mutex_lock(&mutex);
 
 	deallocate();
@@ -239,7 +257,7 @@ void NBRingByteBuffer::resize(size_t size)
 
 	w_commited = w_current = r_commited = r_current = 0;
 	pthread_mutex_unlock(&mutex);
-	pthread_rwlock_unlock(&buffer_lock);
+	flush_unlock();
 }
 
 #ifdef TEST_MAIN

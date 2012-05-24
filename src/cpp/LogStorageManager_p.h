@@ -1,6 +1,8 @@
 #ifndef LOGSTORAGEMANAGER_P_H
 #define LOGSTORAGEMANAGER_P_H
 
+#include <log4cxx/logger.h>
+
 #include <QThread>
 #include <QFile>
 #include <QTimer>
@@ -28,6 +30,8 @@ private:
 	bool quitNow;
 	NBRingByteBuffer* buffer;
 	LogStorage* storage;
+
+	static log4cxx::LoggerPtr logger;
 };
 
 class LogSyncThread : public QThread {
@@ -43,6 +47,8 @@ public slots:
 
 private:
 	LogStorage* storage;
+
+	static log4cxx::LoggerPtr logger;
 };
 
 class LogStorage : public QObject {
@@ -68,6 +74,8 @@ private:
 	LogSyncThread* sync_thread_;
 	LogStorageManager* manager;
 	QMutex file_guard;
+
+	static log4cxx::LoggerPtr logger;
 };
 
 class LogStorageManagerPrivate : public QObject {
@@ -93,6 +101,8 @@ private:
 	unsigned int max_log_size_;
 	QList<LogStorage*> storages;
 	QTimer sync_timer;
+
+	static log4cxx::LoggerPtr logger;
 };
 
 #endif // LOGSTORAGEMANAGER_P_H

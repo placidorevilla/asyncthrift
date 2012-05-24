@@ -1,6 +1,8 @@
 #ifndef LOGSTORAGEMANAGER_H
 #define LOGSTORAGEMANAGER_H
 
+#include <log4cxx/logger.h>
+
 #include <QObject>
 
 class LogStorageManagerPrivate;
@@ -19,6 +21,8 @@ public:
 
 private:
 	LogStorageManagerPrivate* d;
+
+	static log4cxx::LoggerPtr logger;
 };
 
 #endif // LOGSTORAGEMANAGER_H
