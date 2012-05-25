@@ -4,9 +4,17 @@
 #include "AsyncThrift.h"
 #include "ThriftDispatcher.h"
 #include "NBRingByteBuffer.h"
+#include "HBaseOperations.h"
 
 log4cxx::LoggerPtr HBaseHandler::logger(log4cxx::Logger::getLogger(HBaseHandler::staticMetaObject.className()));
 log4cxx::LoggerPtr HBaseHandlerPrivate::logger(log4cxx::Logger::getLogger(HBaseHandler::staticMetaObject.className()));
+
+static int64_t current_timestamp()
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
 
 HBaseHandlerPrivate::HBaseHandlerPrivate() : buffer_(AsyncThrift::instance()->dispatcher()->buffer())
 {
@@ -25,15 +33,52 @@ HBaseHandler::~HBaseHandler()
 	delete d;
 }
 
-void HBaseHandler::mutateRow(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations) {
-	unsigned long tnx;
+void HBaseHandler::mutateRow(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations)
+{
+	mutateRowTs(tableName, row, mutations, current_timestamp());
+}
 
-	void* buffer = d->buffer()->alloc_write(sizeof(unsigned long), &tnx);
-	if (!buffer) {
-		LOG4CXX_WARN(logger, "Invalid state for ring buffer");
-		return;
+void HBaseHandler::mutateRowTs(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations, const int64_t timestamp)
+{
+	unsigned long tnx;
+	size_t size;
+
+	HBaseOperation::PutRow put(tableName, row, mutations, timestamp);
+	HBaseOperation::DeleteRow del(tableName, row, mutations, timestamp);
+
+	if ((size = put.size()) != 0) {
+		void* buffer = d->buffer()->alloc_write(size, &tnx);
+		if (!buffer) {
+			LOG4CXX_WARN(logger, "Invalid state for ring buffer");
+			return;
+		}
+
+		put.serialize(buffer);
+		d->buffer()->commit_write(tnx);
 	}
-	*((unsigned long*)buffer) = 0xDEADBEEF;
-	d->buffer()->commit_write(tnx);
+
+	if ((size = del.size()) != 0) {
+		void* buffer = d->buffer()->alloc_write(size, &tnx);
+		if (!buffer) {
+			LOG4CXX_WARN(logger, "Invalid state for ring buffer");
+			return;
+		}
+
+		del.serialize(buffer);
+		d->buffer()->commit_write(tnx);
+	}
+
 	return;
 }
+
+void HBaseHandler::mutateRows(const Text& tableName, const std::vector<BatchMutation> & rowBatches)
+{
+	mutateRowsTs(tableName, rowBatches, current_timestamp());
+}
+
+void HBaseHandler::mutateRowsTs(const Text& tableName, const std::vector<BatchMutation> & rowBatches, const int64_t timestamp)
+{
+	foreach(const BatchMutation& batch, rowBatches)
+		mutateRowTs(tableName, batch.row, batch.mutations, timestamp);
+}
+

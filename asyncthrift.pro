@@ -23,7 +23,7 @@ CONFIG += debug warn_on link_pkgconfig nostrip
 CONFIG += silent
 QT -= gui
 
-PKGCONFIG += thrift thrift-nb libevent libdaemon liblog4cxx
+PKGCONFIG += thrift thrift-nb libevent libdaemon liblog4cxx zlib
 
 BUILD_DIR = build
 
@@ -96,6 +96,7 @@ HEADERS += src/cpp/AsyncThrift.h \
 	src/cpp/ThriftDispatcher.h \
 	src/cpp/LogStorageManager.h \
 	src/cpp/LogStorageManager_p.h \
+	src/cpp/HBaseOperations.h \
 	$$QTARG_HEADERS
 
 SOURCES += src/cpp/AsyncThrift.cpp \
@@ -107,6 +108,7 @@ SOURCES += src/cpp/AsyncThrift.cpp \
 	src/cpp/JavaObject.cpp \
 	src/cpp/HBaseClient.cpp \
 	src/cpp/HBaseHandler.cpp \
+	src/cpp/ThriftDispatcher.cpp \
 	src/cpp/LogStorageManager.cpp \
-	src/cpp/ThriftDispatcher.cpp
+	src/cpp/HBaseOperations.cpp
 

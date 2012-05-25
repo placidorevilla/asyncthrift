@@ -18,9 +18,11 @@ public:
 	~LogStorageManager();
 
 	bool configure(unsigned int max_log_size, unsigned int sync_period, const QStringList& dirs);
+	int64_t transaction() { return __sync_fetch_and_add(&cur_transaction, 1); }
 
 private:
 	LogStorageManagerPrivate* d;
+	int64_t cur_transaction;
 
 	static log4cxx::LoggerPtr logger;
 };

@@ -9,6 +9,8 @@
 #include <QDir>
 #include <QMutexLocker>
 
+#include <zlib.h>
+
 log4cxx::LoggerPtr LogStorageManager::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
 log4cxx::LoggerPtr LogStorageManagerPrivate::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
 log4cxx::LoggerPtr LogStorage::logger(log4cxx::Logger::getLogger(LogStorage::staticMetaObject.className()));
@@ -17,7 +19,7 @@ log4cxx::LoggerPtr LogSyncThread::logger(log4cxx::Logger::getLogger(LogSyncThrea
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
 
-LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this))
+LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this)), cur_transaction(0)
 {
 }
 
@@ -79,7 +81,7 @@ void LogStorageManagerPrivate::sync_timeout()
 	storages.at((current_storage++) % nstorages)->schedule_sync();
 }
 
-LogStorage::LogStorage(LogStorageManager* manager, const QString& dir) : QObject(manager), write_thread_(new LogWriteThread(this)), sync_thread_(new LogSyncThread(this)), manager(manager)
+LogStorage::LogStorage(LogStorageManager* manager, const QString& dir) : QObject(manager), write_thread_(new LogWriteThread(this)), sync_thread_(new LogSyncThread(this)), manager_(manager)
 {
 	QDir log_dir(dir);
 	unsigned int next_log_index = 0;
@@ -146,12 +148,14 @@ LogWriteThread::~LogWriteThread()
 void LogWriteThread::run()
 {
 	size_t request_size;
-	unsigned long transaction;
+	unsigned long buf_transaction;
 	void* request;
 	char local_buffer[4096];
+	uint64_t transaction;
+	uint64_t crc;
 
 	while (true) {
-		request = buffer->fetch_read(&request_size, &transaction, RINGBUFFER_READ_TIMEOUT);
+		request = buffer->fetch_read(&request_size, &buf_transaction, RINGBUFFER_READ_TIMEOUT);
 		if (!request) {
 			QCoreApplication::processEvents();
 			if (quitNow) {
@@ -164,14 +168,18 @@ void LogWriteThread::run()
 		if (request_size <= sizeof(local_buffer)) {
 			memcpy(local_buffer, request, request_size);
 			request = local_buffer;
-			buffer->commit_read(transaction);
+			buffer->commit_read(buf_transaction);
 		}
 
-		// TODO: write operation to disk
+		transaction = storage->manager()->transaction();
+		crc = crc32(0L, NULL, 0);
+		crc = crc32(crc, reinterpret_cast<quint8*>(request), request_size);
+		write(storage->handle(), &transaction, sizeof(transaction));
 		write(storage->handle(), request, request_size);
+		write(storage->handle(), &crc, sizeof(crc));
 		LOG4CXX_DEBUG(logger, "Log transaction");
 		if (request_size > sizeof(local_buffer))
-			buffer->commit_read(transaction);
+			buffer->commit_read(buf_transaction);
 	}
 }
 

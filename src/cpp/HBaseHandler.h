@@ -108,18 +108,12 @@ public:
 	}
 	void mutateRow(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations);
 
-	void mutateRowTs(const Text& /* tableName */, const Text& /* row */, const std::vector<Mutation> & /* mutations */, const int64_t /* timestamp */) {
-		throw TException("Not implemented");
-		return;
-	}
-	void mutateRows(const Text& /* tableName */, const std::vector<BatchMutation> & /* rowBatches */) {
-		throw TException("Not implemented");
-		return;
-	}
-	void mutateRowsTs(const Text& /* tableName */, const std::vector<BatchMutation> & /* rowBatches */, const int64_t /* timestamp */) {
-		throw TException("Not implemented");
-		return;
-	}
+	void mutateRowTs(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations, const int64_t timestamp);
+
+	void mutateRows(const Text& tableName, const std::vector<BatchMutation> & rowBatches);
+
+	void mutateRowsTs(const Text& tableName, const std::vector<BatchMutation> & rowBatches, const int64_t timestamp);
+
 	int64_t atomicIncrement(const Text& /* tableName */, const Text& /* row */, const Text& /* column */, const int64_t /* value */) {
 		throw TException("Not implemented");
 		int64_t _return = 0;

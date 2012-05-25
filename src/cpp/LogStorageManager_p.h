@@ -66,6 +66,7 @@ public:
 	void sync();
 
 	int handle() const { return current_log.handle(); }
+	LogStorageManager* manager() { return manager_; }
 
 signals:
 	void signal_sync();
@@ -74,7 +75,7 @@ private:
 	QFile current_log;
 	LogWriteThread* write_thread_;
 	LogSyncThread* sync_thread_;
-	LogStorageManager* manager;
+	LogStorageManager* manager_;
 	QMutex file_guard;
 
 	static log4cxx::LoggerPtr logger;
