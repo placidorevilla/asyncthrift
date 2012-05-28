@@ -2,20 +2,20 @@
 
 static size_t size_text(const Text& text, bool long_text)
 {
-	return text.size() + (long_text ? sizeof(quint32) : sizeof(quint8));
+	return text.size() + (long_text ? sizeof(uint32_t) : sizeof(uint8_t));
 }
 
-static void serialize_text(quint8** buffer, const Text& text, bool long_text)
+static void serialize_text(uint8_t** buffer, const Text& text, bool long_text)
 {
-	quint32 size;
+	uint32_t size;
 
 	// TODO: endianness
 	if (long_text) {
-		size = *reinterpret_cast<quint32*>(*buffer) = qMin((quint32)text.size(), (quint32)(1UL << 32) - 1);
-		*buffer += sizeof(quint32);
+		size = *reinterpret_cast<uint32_t*>(*buffer) = qMin((uint32_t)text.size(), (uint32_t)(1UL << 32) - 1);
+		*buffer += sizeof(uint32_t);
 	} else {
-		size = *reinterpret_cast<quint8*>(*buffer) = qMin((quint32)text.size(), (1U << 8) - 1);
-		*buffer += sizeof(quint8);
+		size = *reinterpret_cast<uint8_t*>(*buffer) = qMin((uint32_t)text.size(), (1U << 8) - 1);
+		*buffer += sizeof(uint8_t);
 	}
 
 	memcpy(*buffer, text.data(), size);
@@ -39,22 +39,24 @@ size_t HBaseOperation::MutateRow::size(bool deletes)
 	if (!num_ops)
 		return 0;
 
-	size += sizeof(quint8); // Class
+	size += sizeof(uint8_t); // Class
 	size += size_text(tableName, false); // Table
 	size += size_text(row, true); // RowKey
 	size += sizeof(timestamp); // Timestamp
+	size += sizeof(uint8_t); // Number of mutations
 
-	size = (size + (sizeof(quint64) - 1)) & ~(sizeof(quint64) - 1);
+	// Align size to 64 bits
+	size = (size + (sizeof(uint64_t) - 1)) & ~(sizeof(uint64_t) - 1);
 	return size;
 }
 
 void HBaseOperation::MutateRow::serialize(void* buffer_, bool deletes)
 {
-	quint8* buffer = reinterpret_cast<quint8*>(buffer_);
+	uint8_t* buffer = reinterpret_cast<uint8_t*>(buffer_);
 	int num_ops = 0;
 
-	*reinterpret_cast<quint8*>(buffer) = deletes ? CLASS_DELETE : CLASS_PUT;
-	buffer += sizeof(quint8);
+	*reinterpret_cast<uint8_t*>(buffer) = deletes ? CLASS_DELETE : CLASS_PUT;
+	buffer += sizeof(uint8_t);
 	serialize_text(&buffer, tableName, false);
 	serialize_text(&buffer, row, true);
 	*reinterpret_cast<int64_t*>(buffer) = timestamp;
@@ -66,8 +68,8 @@ void HBaseOperation::MutateRow::serialize(void* buffer_, bool deletes)
 		num_ops++;
 	}
 
-	*reinterpret_cast<quint8*>(buffer) = num_ops;
-	buffer += sizeof(quint8);
+	*reinterpret_cast<uint8_t*>(buffer) = num_ops;
+	buffer += sizeof(uint8_t);
 
 	foreach(const Mutation& mutation, mutations) {
 		if (!((mutation.isDelete && deletes) || (!mutation.isDelete && !deletes)) || !num_ops--)
