@@ -9,7 +9,7 @@
 #include <QDir>
 #include <QMutexLocker>
 
-#include <zlib.h>
+#include <lzma.h>
 
 log4cxx::LoggerPtr LogStorageManager::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
 log4cxx::LoggerPtr LogStorageManagerPrivate::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
@@ -172,8 +172,7 @@ void LogWriteThread::run()
 		}
 
 		transaction = storage->manager()->transaction();
-		crc = crc32(0L, NULL, 0);
-		crc = crc32(crc, reinterpret_cast<quint8*>(request), request_size);
+		crc = lzma_crc64(reinterpret_cast<uint8_t*>(request), request_size, 0);
 		write(storage->handle(), &transaction, sizeof(transaction));
 		write(storage->handle(), request, request_size);
 		write(storage->handle(), &crc, sizeof(crc));

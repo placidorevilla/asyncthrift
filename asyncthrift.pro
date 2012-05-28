@@ -23,7 +23,7 @@ CONFIG += debug warn_on link_pkgconfig nostrip
 CONFIG += silent
 QT -= gui
 
-PKGCONFIG += thrift thrift-nb libevent libdaemon liblog4cxx zlib
+PKGCONFIG += thrift thrift-nb libevent libdaemon liblog4cxx liblzma
 
 BUILD_DIR = build
 
