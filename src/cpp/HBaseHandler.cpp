@@ -40,11 +40,27 @@ void HBaseHandler::mutateRow(const Text& tableName, const Text& row, const std::
 
 void HBaseHandler::mutateRowTs(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations, const int64_t timestamp)
 {
+	std::vector<BatchMutation> rowBatches;
+	BatchMutation row_batch;
+	row_batch.row = row;
+	row_batch.mutations = mutations;
+	rowBatches.push_back(row_batch);
+
+	mutateRowsTs(tableName, rowBatches, timestamp);
+}
+
+void HBaseHandler::mutateRows(const Text& tableName, const std::vector<BatchMutation> & rowBatches)
+{
+	mutateRowsTs(tableName, rowBatches, current_timestamp());
+}
+
+void HBaseHandler::mutateRowsTs(const Text& tableName, const std::vector<BatchMutation> & rowBatches, const int64_t timestamp)
+{
 	unsigned long tnx;
 	size_t size;
 
-	HBaseOperation::PutRow put(tableName, row, mutations, timestamp);
-	HBaseOperation::DeleteRow del(tableName, row, mutations, timestamp);
+	HBaseOperation::PutRows put(tableName, rowBatches, timestamp);
+	HBaseOperation::DeleteRows del(tableName, rowBatches, timestamp);
 
 	if ((size = put.size()) != 0) {
 		void* buffer = d->buffer()->alloc_write(size, &tnx);
@@ -69,16 +85,5 @@ void HBaseHandler::mutateRowTs(const Text& tableName, const Text& row, const std
 	}
 
 	return;
-}
-
-void HBaseHandler::mutateRows(const Text& tableName, const std::vector<BatchMutation> & rowBatches)
-{
-	mutateRowsTs(tableName, rowBatches, current_timestamp());
-}
-
-void HBaseHandler::mutateRowsTs(const Text& tableName, const std::vector<BatchMutation> & rowBatches, const int64_t timestamp)
-{
-	foreach(const BatchMutation& batch, rowBatches)
-		mutateRowTs(tableName, batch.row, batch.mutations, timestamp);
 }
 

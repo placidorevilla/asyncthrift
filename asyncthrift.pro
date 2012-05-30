@@ -96,6 +96,7 @@ HEADERS += src/cpp/AsyncThrift.h \
 	src/cpp/ThriftDispatcher.h \
 	src/cpp/LogStorageManager.h \
 	src/cpp/LogStorageManager_p.h \
+	src/cpp/LogEndian.h \
 	src/cpp/HBaseOperations.h \
 	$$QTARG_HEADERS
 

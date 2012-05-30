@@ -3,22 +3,6 @@
 
 #include "HBaseHandler.h"
 
-#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
-#define LOG_ENDIAN(x) (x)
-#else
-#define LOG_ENDIAN(x) (bswap(x))
-#endif
-
-template <typename T> T bswap(T v);
-template <> inline uint64_t bswap<uint64_t>(uint64_t v) { return bswap_64(v); }
-template <> inline uint32_t bswap<uint32_t>(uint32_t v) { return bswap_32(v); }
-template <> inline uint16_t bswap<uint16_t>(uint16_t v) { return bswap_16(v); }
-template <> inline uint8_t bswap<uint8_t>(uint8_t v) { return v; }
-template <> inline int64_t bswap<int64_t>(int64_t v) { return bswap_64(v); }
-template <> inline int32_t bswap<int32_t>(int32_t v) { return bswap_32(v); }
-template <> inline int16_t bswap<int16_t>(int16_t v) { return bswap_16(v); }
-template <> inline int8_t bswap<int8_t>(int8_t v) { return v; }
-
 class HBaseOperationInterface {
 public:
 	size_t size();
@@ -27,41 +11,44 @@ public:
 
 class HBaseOperation {
 public:
-	enum { CLASS_PUT, CLASS_DELETE };
+	enum { CLASS_PUT_BATCH, CLASS_DELETE_BATCH };
 
-	class MutateRow : public HBaseOperationInterface {
+	class MutateRows : public HBaseOperationInterface {
 	public:
-		MutateRow(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations, const int64_t timestamp) :
-			tableName(tableName), row(row), mutations(mutations), timestamp(timestamp)
+		MutateRows(const Text& tableName, const std::vector<BatchMutation> & row_batches, const int64_t timestamp) :
+			tableName(tableName), row_batches(row_batches), timestamp(timestamp), num_rows(0)
 		{}
 
 		size_t size(bool deletes);
 		void serialize(void* buffer, bool deletes);
 
 		const Text& tableName;
-		const Text& row;
-		const std::vector<Mutation> & mutations;
+		const std::vector<BatchMutation> & row_batches;
 		const int64_t timestamp;
+
+	private:
+		uint8_t num_rows;
+		std::vector<std::map<std::string, std::vector<const Mutation*> > > families_per_row;
 	};
 
-	class PutRow : public MutateRow {
+	class PutRows : public MutateRows {
 	public:
-		PutRow(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations, const int64_t timestamp) :
-			MutateRow(tableName, row, mutations, timestamp)
+		PutRows(const Text& tableName, const std::vector<BatchMutation> & row_batches, const int64_t timestamp) :
+			MutateRows(tableName, row_batches, timestamp)
 		{}
 
-		size_t size() { return MutateRow::size(false); }
-		void serialize(void* buffer) { MutateRow::serialize(buffer, false); }
+		size_t size() { return MutateRows::size(false); }
+		void serialize(void* buffer) { MutateRows::serialize(buffer, false); }
 	};
 
-	class DeleteRow : public MutateRow {
+	class DeleteRows : public MutateRows {
 	public:
-		DeleteRow(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations, const int64_t timestamp) :
-			MutateRow(tableName, row, mutations, timestamp)
+		DeleteRows(const Text& tableName, const std::vector<BatchMutation> & row_batches, const int64_t timestamp) :
+			MutateRows(tableName, row_batches, timestamp)
 		{}
 
-		size_t size() { return MutateRow::size(true); }
-		void serialize(void* buffer) { MutateRow::serialize(buffer, true); }
+		size_t size() { return MutateRows::size(true); }
+		void serialize(void* buffer) { MutateRows::serialize(buffer, true); }
 	};
 };
 

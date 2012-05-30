@@ -4,7 +4,7 @@
 #include "AsyncThrift.h"
 #include "ThriftDispatcher.h"
 #include "NBRingByteBuffer.h"
-#include "HBaseOperations.h"
+#include "LogEndian.h"
 
 #include <QSettings>
 #include <QDir>
@@ -172,6 +172,7 @@ void LogWriteThread::run()
 			buffer->commit_read(buf_transaction);
 		}
 
+		// TODO: encode request size in the transaction
 		transaction = LOG_ENDIAN(storage->manager()->transaction());
 		crc = LOG_ENDIAN(lzma_crc64(reinterpret_cast<uint8_t*>(request), request_size, 0));
 		write(storage->handle(), &transaction, sizeof(transaction));
