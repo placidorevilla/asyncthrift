@@ -62,8 +62,9 @@ size_t HBaseOperation::MutateRows::size(bool deletes)
 			std::string family(mutation->column.substr(0, pos));
 
 			ops_size += size_smalltext(mutation->column.substr(pos + 1)); // Qualifier
-			ops_size += size_bigtext(mutation->value); // Value
 			ops_size += sizeof(int64_t); // Timestamp
+			if (!deletes)
+				ops_size += size_bigtext(mutation->value); // Value
 
 			std::map<std::string, std::vector<const Mutation*> >::iterator i = families.find(family);
 			if (i != families.end()) {
@@ -124,8 +125,9 @@ void HBaseOperation::MutateRows::serialize(void* buffer_, bool deletes)
 				size_t pos = (*qualifier)->column.find_first_of(':');
 //				printf("\t\t\tqualifier '%s' value '%s' timestamp %lld\n", (*qualifier)->column.substr(pos + 1).c_str(), (*qualifier)->value.c_str(), (int64_t)timestamp);
 				serialize_smalltext(&buffer, (*qualifier)->column.substr(pos + 1));
-				serialize_bigtext(&buffer, (*qualifier)->value);
 				serialize_integer(&buffer, (int64_t)timestamp);
+				if (!deletes)
+					serialize_bigtext(&buffer, (*qualifier)->value);
 			}
 		}
 	}
