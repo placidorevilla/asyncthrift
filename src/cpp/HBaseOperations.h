@@ -3,17 +3,24 @@
 
 #include "HBaseHandler.h"
 
-class HBaseOperationInterface {
-public:
-	size_t size();
-	void serialize(void* buffer);
-};
+#include <QByteArray>
+#include <QPair>
+#include <QVector>
 
 class HBaseOperation {
 public:
-	enum { CLASS_PUT_BATCH, CLASS_DELETE_BATCH };
+	typedef enum { CLASS_PUT_BATCH, CLASS_DELETE_BATCH } Type;
+};
 
-	class MutateRows : public HBaseOperationInterface {
+class SerializableHBaseOperation : public HBaseOperation {
+public:
+	class SerializableInterface {
+	public:
+		size_t size();
+		void serialize(void* buffer);
+	};
+
+	class MutateRows : public SerializableInterface {
 	public:
 		MutateRows(const Text& tableName, const std::vector<BatchMutation> & row_batches, const int64_t timestamp) :
 			tableName(tableName), row_batches(row_batches), timestamp(timestamp), num_rows(0)
@@ -49,6 +56,51 @@ public:
 
 		size_t size() { return MutateRows::size(true); }
 		void serialize(void* buffer) { MutateRows::serialize(buffer, true); }
+	};
+};
+
+class DeserializableHBaseOperation : public HBaseOperation {
+public:
+	class DeserializableInterface {
+	public:
+		void deserialize(void* buffer);
+	};
+
+	class QualifierValue {
+	public:
+		QualifierValue() : timestamp_(0)
+		{}
+		QualifierValue(QByteArray qualifier, QByteArray value, int64_t timestamp) : qualifier_(qualifier), value_(value), timestamp_(timestamp)
+		{}
+
+		QByteArray qualifier() const { return qualifier_; }
+		QByteArray value() const { return value_; }
+		int64_t timestamp() const { return timestamp_; }
+
+	private:
+		QByteArray qualifier_;
+		QByteArray value_;
+		int64_t timestamp_;
+	};
+
+	typedef QPair<QByteArray, QVector<QualifierValue> > FamilyValues;
+	typedef QPair<QByteArray, QVector<FamilyValues> > RowValues;
+
+	class MutateRows : public DeserializableInterface {
+	public:
+		MutateRows() : DeserializableInterface()
+		{}
+
+		void deserialize(void* buffer);
+
+		Type type() const { return type_; }
+		QByteArray table() const { return table_; }
+		QVector<RowValues> rows() const { return rows_; }
+
+	private:
+		Type type_;
+		QByteArray table_;
+		QVector<RowValues> rows_;
 	};
 };
 

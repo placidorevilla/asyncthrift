@@ -59,8 +59,8 @@ void HBaseHandler::mutateRowsTs(const Text& tableName, const std::vector<BatchMu
 	unsigned long tnx;
 	size_t size;
 
-	HBaseOperation::PutRows put(tableName, rowBatches, timestamp);
-	HBaseOperation::DeleteRows del(tableName, rowBatches, timestamp);
+	SerializableHBaseOperation::PutRows put(tableName, rowBatches, timestamp);
+	SerializableHBaseOperation::DeleteRows del(tableName, rowBatches, timestamp);
 
 	if ((size = put.size()) != 0) {
 		void* buffer = d->buffer()->alloc_write(size, &tnx);

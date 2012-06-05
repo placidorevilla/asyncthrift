@@ -21,10 +21,25 @@ static void serialize_text(uint8_t** buffer, const Text& text)
 	*buffer += size;
 }
 
+template <typename T>
+static QByteArray deserialize_text(uint8_t** buffer)
+{
+	int size;
+	const char* data;
+	
+	size = (int) LOG_ENDIAN(*reinterpret_cast<T*>(*buffer));
+	*buffer += sizeof(T);
+	data = reinterpret_cast<const char*>(*buffer);
+	*buffer += size;
+	return QByteArray::fromRawData(data, size);
+}
+
 static inline size_t size_smalltext(const Text& text) { return size_text<uint8_t>(text); }
 static inline void serialize_smalltext(uint8_t** buffer, const Text& text) { serialize_text<uint8_t>(buffer, text); }
+static inline QByteArray deserialize_smalltext(uint8_t** buffer) { return deserialize_text<uint8_t>(buffer); }
 static inline size_t size_bigtext(const Text& text) { return size_text<uint32_t>(text); }
 static inline void serialize_bigtext(uint8_t** buffer, const Text& text) { serialize_text<uint32_t>(buffer, text); }
+static inline QByteArray deserialize_bigtext(uint8_t** buffer) { return deserialize_text<uint32_t>(buffer); }
 
 template <typename T>
 static inline void serialize_integer(uint8_t** buffer, T val)
@@ -33,7 +48,16 @@ static inline void serialize_integer(uint8_t** buffer, T val)
 	*buffer += sizeof(T);
 }
 
-size_t HBaseOperation::MutateRows::size(bool deletes)
+template <typename T>
+static inline T deserialize_integer(uint8_t** buffer)
+{
+	T val;
+	val = LOG_ENDIAN(*reinterpret_cast<T*>(*buffer));
+	*buffer += sizeof(T);
+	return val;
+}
+
+size_t SerializableHBaseOperation::MutateRows::size(bool deletes)
 {
 	size_t size = 0;
 	num_rows = 0;
@@ -97,7 +121,7 @@ size_t HBaseOperation::MutateRows::size(bool deletes)
 	return size;
 }
 
-void HBaseOperation::MutateRows::serialize(void* buffer_, bool deletes)
+void SerializableHBaseOperation::MutateRows::serialize(void* buffer_, bool deletes)
 {
 	uint8_t* buffer = reinterpret_cast<uint8_t*>(buffer_);
 
@@ -130,6 +154,37 @@ void HBaseOperation::MutateRows::serialize(void* buffer_, bool deletes)
 					serialize_bigtext(&buffer, (*qualifier)->value);
 			}
 		}
+	}
+}
+
+void DeserializableHBaseOperation::MutateRows::deserialize(void* buffer_)
+{
+	uint8_t* buffer = reinterpret_cast<uint8_t*>(buffer_);
+
+	type_ = (typeof(type_)) deserialize_integer<uint8_t>(&buffer);
+	table_ = deserialize_smalltext(&buffer);
+//	printf("%s in table '%.*s'\n", type_ == CLASS_DELETE_BATCH ? "DELETE" : "PUT", table_.size(), table_.constData());
+	
+	for (uint8_t num_rows = deserialize_integer<uint8_t>(&buffer); num_rows; num_rows--) {
+		QByteArray key(deserialize_bigtext(&buffer));
+		QVector<FamilyValues> families;
+//		printf("\trow '%.*s'\n", key.size(), key.constData());
+		for (uint8_t num_families = deserialize_integer<uint8_t>(&buffer); num_families; num_families--) {
+			QByteArray family(deserialize_smalltext(&buffer));
+			QVector<QualifierValue> qualifiers;
+//			printf("\t\tfamily '%.*s'\n", family.size(), family.constData());
+			for (uint8_t num_qualifiers = deserialize_integer<uint8_t>(&buffer); num_qualifiers; num_qualifiers--) {
+				QByteArray qualifier(deserialize_smalltext(&buffer));
+				int64_t timestamp(deserialize_integer<int64_t>(&buffer));
+				QByteArray value;
+				if (type_ == CLASS_PUT_BATCH)
+					value = deserialize_bigtext(&buffer);
+//				printf("\t\t\tqualifier '%.*s' value '%.*s' timestamp %lld\n", qualifier.size(), qualifier.constData(), value.size(), value.constData(), timestamp);
+				qualifiers.append(QualifierValue(qualifier, value, timestamp));
+			}
+			families.append(qMakePair(family, qualifiers));
+		}
+		rows_.append(qMakePair(key, families));
 	}
 }
 

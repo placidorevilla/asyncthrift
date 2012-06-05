@@ -5,12 +5,17 @@
 #include "ThriftDispatcher.h"
 #include "NBRingByteBuffer.h"
 #include "LogEndian.h"
+#include "HBaseOperations.h"
+
+#include "HBaseClient.h"
 
 #include <QSettings>
 #include <QDir>
 #include <QMutexLocker>
 
 #include <lzma.h>
+
+using namespace AsyncHBase;
 
 log4cxx::LoggerPtr LogStorageManager::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
 log4cxx::LoggerPtr LogStorageManagerPrivate::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
@@ -40,7 +45,12 @@ bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_p
 	return true;
 }
 
-LogStorageManagerPrivate::LogStorageManagerPrivate(LogStorageManager* manager) : QObject(manager), manager(manager), max_log_size_(0)
+AsyncHBase::HBaseClient* LogStorageManager::hbase_client()
+{
+	return d->hbase_client();
+}
+
+LogStorageManagerPrivate::LogStorageManagerPrivate(LogStorageManager* manager) : QObject(manager), manager(manager), max_log_size_(0), hbase_client_(new AsyncHBase::HBaseClient("localhost"))
 {
 	this->connect(&sync_timer, SIGNAL(timeout()), SLOT(sync_timeout()));	
 }
@@ -118,7 +128,8 @@ void LogStorage::sync()
 {
 	QMutexLocker locker(&file_guard);
 	LOG4CXX_DEBUG(logger, "Syncing storage");
-	fdatasync(current_log.handle());
+	if (current_log.handle() != -1)
+		fdatasync(current_log.handle());
 }
 
 LogSyncThread::LogSyncThread(LogStorage* storage) : storage(storage)
@@ -148,10 +159,11 @@ LogWriteThread::~LogWriteThread()
 
 void LogWriteThread::run()
 {
-	size_t request_size;
+	size_t request_size, rounded_request_size;
 	unsigned long buf_transaction;
 	void* request;
 	char local_buffer[4096];
+	char padding_buffer[sizeof(uint64_t)];
 	uint64_t transaction;
 	uint64_t crc;
 
@@ -172,13 +184,36 @@ void LogWriteThread::run()
 			buffer->commit_read(buf_transaction);
 		}
 
-		// TODO: encode request size in the transaction
-		transaction = LOG_ENDIAN(storage->manager()->transaction());
+		rounded_request_size = (request_size + sizeof(uint64_t) - 1) / sizeof(uint64_t);
+		transaction = LOG_ENDIAN((storage->manager()->transaction() * sizeof(uint64_t)) | rounded_request_size);
 		crc = LOG_ENDIAN(lzma_crc64(reinterpret_cast<uint8_t*>(request), request_size, 0));
 		write(storage->handle(), &transaction, sizeof(transaction));
 		write(storage->handle(), request, request_size);
+		rounded_request_size *= sizeof(uint64_t);
+		if (rounded_request_size != request_size)
+			write(storage->handle(), padding_buffer, rounded_request_size - request_size);
 		write(storage->handle(), &crc, sizeof(crc));
 		LOG4CXX_DEBUG(logger, "Log transaction");
+
+#if 0
+		DeserializableHBaseOperation::MutateRows mutations;
+		mutations.deserialize(request);
+
+		if (mutations.type() == HBaseOperation::CLASS_PUT_BATCH) {
+			foreach (const DeserializableHBaseOperation::RowValues& row, mutations.rows()) {
+				foreach (const DeserializableHBaseOperation::FamilyValues& family, row.second) {
+					foreach (const DeserializableHBaseOperation::QualifierValue& qv, family.second) {
+						PutRequest* pr = new PutRequest(mutations.table(), row.first, family.first, qv.qualifier(), qv.value(), qv.timestamp());
+
+						pr->set_bufferable(true);
+						pr->set_durable(true);
+
+						storage->manager()->hbase_client()->put(*pr);
+					}
+				}
+			}
+		}
+#endif
 		if (request_size > sizeof(local_buffer))
 			buffer->commit_read(buf_transaction);
 	}

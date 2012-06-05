@@ -9,6 +9,10 @@ class LogStorageManagerPrivate;
 class QSettings;
 class QStringList;
 
+namespace AsyncHBase {
+	class HBaseClient;
+}
+
 class LogStorageManager : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogStorageManager)
@@ -19,6 +23,8 @@ public:
 
 	bool configure(unsigned int max_log_size, unsigned int sync_period, const QStringList& dirs);
 	uint64_t transaction() { return __sync_fetch_and_add(&cur_transaction, 1); }
+
+	AsyncHBase::HBaseClient* hbase_client();
 
 private:
 	LogStorageManagerPrivate* d;
