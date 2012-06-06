@@ -1,5 +1,5 @@
-#ifndef MAIN_H
-#define MAIN_H
+#ifndef ASYNCTHRIFTLOGGER_H
+#define ASYNCTHRIFTLOGGER_H
 
 #include "TApplication.h"
 
@@ -9,16 +9,16 @@
 
 class ThriftDispatcher;
 
-class AsyncThrift : public TApplication
+class AsyncThriftLogger : public TApplication
 {
 	Q_OBJECT
-	Q_DISABLE_COPY(AsyncThrift)
+	Q_DISABLE_COPY(AsyncThriftLogger)
 
 public:
-	AsyncThrift(int& argc, char** argv);
-	virtual ~AsyncThrift();
+	AsyncThriftLogger(int& argc, char** argv);
+	virtual ~AsyncThriftLogger();
 
-	static AsyncThrift* instance() { return qobject_cast<AsyncThrift*>(QCoreApplication::instance()); }
+	static AsyncThriftLogger* instance() { return qobject_cast<AsyncThriftLogger*>(QCoreApplication::instance()); }
 	ThriftDispatcher* dispatcher() const { return dispatcher_; }
 
 protected:
@@ -36,4 +36,4 @@ private:
 	static log4cxx::LoggerPtr logger;
 };
 
-#endif // MAIN_H
+#endif // ASYNCTHRIFTLOGGER_H

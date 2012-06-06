@@ -1,13 +1,11 @@
 #include "LogStorageManager.h"
 #include "LogStorageManager_p.h"
 
-#include "AsyncThrift.h"
+#include "AsyncThriftLogger.h"
 #include "ThriftDispatcher.h"
 #include "NBRingByteBuffer.h"
 #include "LogEndian.h"
 #include "HBaseOperations.h"
-
-#include "HBaseClient.h"
 
 #include <QSettings>
 #include <QDir>
@@ -17,8 +15,6 @@
 #include <lzma.h>
 
 #include <fcntl.h>
-
-using namespace AsyncHBase;
 
 log4cxx::LoggerPtr LogStorageManager::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
 log4cxx::LoggerPtr LogStorageManagerPrivate::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
@@ -49,17 +45,12 @@ bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_p
 	return true;
 }
 
-AsyncHBase::HBaseClient* LogStorageManager::hbase_client()
-{
-	return d->hbase_client();
-}
-
 size_t LogStorageManager::max_log_size() const
 {
 	return d->max_log_size();
 }
 
-LogStorageManagerPrivate::LogStorageManagerPrivate(LogStorageManager* manager) : QObject(manager), manager(manager), max_log_size_(0), hbase_client_(new AsyncHBase::HBaseClient("localhost"))
+LogStorageManagerPrivate::LogStorageManagerPrivate(LogStorageManager* manager) : QObject(manager), manager(manager), max_log_size_(0)
 {
 	this->connect(&sync_timer, SIGNAL(timeout()), SLOT(sync_timeout()));	
 }
@@ -194,7 +185,7 @@ void LogSyncThread::sync()
 	storage->sync();
 }
 
-LogWriteThread::LogWriteThread(LogStorage* storage) : quitNow(false), buffer(AsyncThrift::instance()->dispatcher()->buffer()), storage(storage)
+LogWriteThread::LogWriteThread(LogStorage* storage) : quitNow(false), buffer(AsyncThriftLogger::instance()->dispatcher()->buffer()), storage(storage)
 {
 	start();
 	moveToThread(this);

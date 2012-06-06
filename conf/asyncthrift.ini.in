@@ -1,0 +1,10 @@
+[General]
+Port=9090
+ThriftThreads=4
+BufferSize=64
+
+[LogStorage]
+SyncPeriod=1000
+MaxLogSize=67108864
+Paths\\1\\Dir=$${LOCALSTATEDIR}/lib/$${PACKAGE}
+Paths\\size=1

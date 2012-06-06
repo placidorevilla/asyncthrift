@@ -1,6 +1,4 @@
-#include "AsyncThrift.h"
-
-#include "ThriftDispatcher.h"
+#include "AsyncThriftForwarder.h"
 
 #include <cmdline.hpp>
 #include <help.hpp>
@@ -15,18 +13,17 @@
 const char* LOG4CXX_CONFIG_FILE = "log4cxx.xml";
 const char* ASYNCTHRIFT_CONFIG_FILE = "asyncthrift.ini";
 
-log4cxx::LoggerPtr AsyncThrift::logger(log4cxx::Logger::getLogger(AsyncThrift::staticMetaObject.className()));
+log4cxx::LoggerPtr AsyncThriftForwarder::logger(log4cxx::Logger::getLogger(AsyncThriftForwarder::staticMetaObject.className()));
 
-AsyncThrift::AsyncThrift(int& argc, char** argv) : TApplication(argc, argv), dispatcher_(0), config_dir(QDir("/etc/asyncthrift"))
+AsyncThriftForwarder::AsyncThriftForwarder(int& argc, char** argv) : TApplication(argc, argv), config_dir(QDir("/etc/asyncthrift"))
 {
 }
 
-AsyncThrift::~AsyncThrift()
+AsyncThriftForwarder::~AsyncThriftForwarder()
 {
-	delete dispatcher_;
 }
 
-bool AsyncThrift::init()
+bool AsyncThriftForwarder::init()
 {
 	log4cxx::BasicConfigurator::configure();
 	this->setApplicationName("asyncthrift");
@@ -37,7 +34,7 @@ bool AsyncThrift::init()
 		QtArg config('c', "config", "Configuration directory override", false, true);
 
 		QtArgHelp help(&cmdline);
-		help.printer()->setProgramDescription("Thrift asynchronous server.");
+		help.printer()->setProgramDescription("Thrift asynchronous server forwarder.");
 		help.printer()->setExecutableName(this->applicationName());
 
 		cmdline.addArg(&config);
@@ -58,8 +55,6 @@ bool AsyncThrift::init()
 		return false;
 	}
 
-	dispatcher_ = new ThriftDispatcher;
-
 	if (!reloadConfig())
 		return false;
 
@@ -69,16 +64,13 @@ bool AsyncThrift::init()
 	return true;
 }
 
-int AsyncThrift::run()
+int AsyncThriftForwarder::run()
 {
-	dispatcher()->start();
 	int res = TApplication::run();
-	dispatcher()->stop();
-	dispatcher()->wait();
 	return res;
 }
 
-void AsyncThrift::signal_received(int signo)
+void AsyncThriftForwarder::signal_received(int signo)
 {
 	if (signo == SIGTERM || signo == SIGINT)
 		quit();
@@ -86,7 +78,7 @@ void AsyncThrift::signal_received(int signo)
 		reloadConfig();
 }
 
-bool AsyncThrift::reloadConfig()
+bool AsyncThriftForwarder::reloadConfig()
 {
 	LOG4CXX_DEBUG(logger, "Load configuration...");
 
@@ -105,28 +97,12 @@ bool AsyncThrift::reloadConfig()
 
 	QSettings settings(config_dir.absoluteFilePath(ASYNCTHRIFT_CONFIG_FILE), QSettings::IniFormat);
 
-	dispatcher()->set_port(settings.value("Port", 9090).toUInt());
-	dispatcher()->set_num_worker_threads(settings.value("ThriftThreads", 4).toUInt());
-	dispatcher()->set_buffer_size(settings.value("BufferSize", 64).toUInt());
-
-	settings.beginGroup("LogStorage");
-	QList<QString> log_dirs;
-
-	int nentries = settings.beginReadArray("Paths");
-	for (int i = 0; i < nentries; i++) {
-		settings.setArrayIndex(i);
-		log_dirs.append(settings.value("Dir").toString());
-	}
-	settings.endArray();
-
-	dispatcher()->configure_log_storage(settings.value("MaxLogSize", 64).toUInt(), settings.value("SyncPeriod", 1000).toUInt(), log_dirs);
-
 	return true;
 }
 
 int main(int argc, char **argv)
 {
-	AsyncThrift app(argc, argv);
+	AsyncThriftForwarder app(argc, argv);
 	return app.start();
 }
 

@@ -1,7 +1,7 @@
 #include "HBaseHandler.h"
 #include "HBaseHandler_p.h"
 
-#include "AsyncThrift.h"
+#include "AsyncThriftLogger.h"
 #include "ThriftDispatcher.h"
 #include "NBRingByteBuffer.h"
 #include "HBaseOperations.h"
@@ -16,7 +16,7 @@ static int64_t current_timestamp()
 	return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
-HBaseHandlerPrivate::HBaseHandlerPrivate() : buffer_(AsyncThrift::instance()->dispatcher()->buffer())
+HBaseHandlerPrivate::HBaseHandlerPrivate() : buffer_(AsyncThriftLogger::instance()->dispatcher()->buffer())
 {
 }
 

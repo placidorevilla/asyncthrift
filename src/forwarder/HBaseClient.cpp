@@ -74,9 +74,9 @@ long HBaseClient::uncontendedMetaLookupCount() const
 	return invokeInstanceMethod("uncontendedMetaLookupCount", "()J").j;
 }
 
-static const char* generic_callback_class_name = "com/stumbleupon/async/GenericCallback";
+static const char* generic_callback_class_name = "com/tuenti/async/GenericCallback";
 
-JNIEXPORT jobject JNICALL Java_com_stumbleupon_async_GenericCallback_call(JNIEnv* env, jobject self, jobject arg)
+JNIEXPORT jobject JNICALL Java_com_tuenti_async_GenericCallback_call(JNIEnv* env, jobject self, jobject arg)
 {
 	jclass cls = env->FindClass(generic_callback_class_name);
 	jfieldID fid = env->GetFieldID(cls, "native_object", "J");
@@ -87,7 +87,7 @@ JNIEXPORT jobject JNICALL Java_com_stumbleupon_async_GenericCallback_call(JNIEnv
 }
 
 static JNINativeMethod methods[] = {
-	{(char *)"call", (char *)"(Ljava/lang/Object;)Ljava/lang/Object;", (void *)&Java_com_stumbleupon_async_GenericCallback_call}
+	{(char *)"call", (char *)"(Ljava/lang/Object;)Ljava/lang/Object;", (void *)&Java_com_tuenti_async_GenericCallback_call}
 };
 
 static void initialize()

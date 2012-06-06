@@ -13,10 +13,6 @@ class LogStorageManager;
 class LogStorage;
 class NBRingByteBuffer;
 
-namespace AsyncHBase {
-	class HBaseClient;
-}
-
 class LogWriteThread : public QThread {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogWriteThread)
@@ -125,8 +121,6 @@ public:
 
 	void create_storages(const QStringList& dirs);
 
-	AsyncHBase::HBaseClient* hbase_client() { return hbase_client_; }
-
 private slots:
 	void sync_timeout();
 
@@ -135,8 +129,6 @@ private:
 	unsigned int max_log_size_;
 	QList<LogStorage*> storages;
 	QTimer sync_timer;
-
-	AsyncHBase::HBaseClient* hbase_client_;
 
 	static log4cxx::LoggerPtr logger;
 };
