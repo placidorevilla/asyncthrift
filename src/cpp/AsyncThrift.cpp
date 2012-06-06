@@ -117,6 +117,7 @@ bool AsyncThrift::reloadConfig()
 		settings.setArrayIndex(i);
 		log_dirs.append(settings.value("Dir").toString());
 	}
+	settings.endArray();
 
 	dispatcher()->configure_log_storage(settings.value("MaxLogSize", 64).toUInt(), settings.value("SyncPeriod", 1000).toUInt(), log_dirs);
 

@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QTimer>
 #include <QMutex>
+#include <QDir>
 
 class LogStorageManager;
 class LogStorage;
@@ -55,6 +56,22 @@ private:
 	static log4cxx::LoggerPtr logger;
 };
 
+class LogAllocateThread : public QThread {
+	Q_OBJECT
+	Q_DISABLE_COPY(LogAllocateThread)
+
+public:
+	explicit LogAllocateThread(LogStorage* storage);
+
+protected:
+	virtual void run();
+
+private:
+	LogStorage* storage;
+
+	static log4cxx::LoggerPtr logger;
+};
+
 class LogStorage : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogStorage)
@@ -69,16 +86,24 @@ public:
 	void schedule_sync();
 	void sync();
 
-	int handle() const { return current_log.handle(); }
+	void get_next_file();
+
+	QFile* current_log() { return &current_log_; }
 	LogStorageManager* manager() { return manager_; }
+	QDir* storage_dir() { return &storage_dir_; }
 
 signals:
 	void signal_sync();
 
+private slots:
+	void finished_allocation();
+
 private:
-	QFile current_log;
+	QDir storage_dir_;
+	QFile current_log_;
 	LogWriteThread* write_thread_;
 	LogSyncThread* sync_thread_;
+	LogAllocateThread* alloc_thread_;
 	LogStorageManager* manager_;
 	QMutex file_guard;
 

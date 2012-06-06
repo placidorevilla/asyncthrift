@@ -12,8 +12,11 @@
 #include <QSettings>
 #include <QDir>
 #include <QMutexLocker>
+#include <QTemporaryFile>
 
 #include <lzma.h>
+
+#include <fcntl.h>
 
 using namespace AsyncHBase;
 
@@ -22,6 +25,7 @@ log4cxx::LoggerPtr LogStorageManagerPrivate::logger(log4cxx::Logger::getLogger(L
 log4cxx::LoggerPtr LogStorage::logger(log4cxx::Logger::getLogger(LogStorage::staticMetaObject.className()));
 log4cxx::LoggerPtr LogWriteThread::logger(log4cxx::Logger::getLogger(LogWriteThread::staticMetaObject.className()));
 log4cxx::LoggerPtr LogSyncThread::logger(log4cxx::Logger::getLogger(LogSyncThread::staticMetaObject.className()));
+log4cxx::LoggerPtr LogAllocateThread::logger(log4cxx::Logger::getLogger(LogAllocateThread::staticMetaObject.className()));
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
 
@@ -38,8 +42,8 @@ bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_p
 {
 	LOG4CXX_DEBUG(logger, "Configuring storages");
 
-	d->create_storages(dirs);
 	d->set_max_log_size(max_log_size);
+	d->create_storages(dirs);
 	d->set_sync_period(sync_period);
 
 	return true;
@@ -48,6 +52,11 @@ bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_p
 AsyncHBase::HBaseClient* LogStorageManager::hbase_client()
 {
 	return d->hbase_client();
+}
+
+size_t LogStorageManager::max_log_size() const
+{
+	return d->max_log_size();
 }
 
 LogStorageManagerPrivate::LogStorageManagerPrivate(LogStorageManager* manager) : QObject(manager), manager(manager), max_log_size_(0), hbase_client_(new AsyncHBase::HBaseClient("localhost"))
@@ -92,18 +101,9 @@ void LogStorageManagerPrivate::sync_timeout()
 	storages.at((current_storage++) % nstorages)->schedule_sync();
 }
 
-LogStorage::LogStorage(LogStorageManager* manager, const QString& dir) : QObject(manager), write_thread_(new LogWriteThread(this)), sync_thread_(new LogSyncThread(this)), manager_(manager)
+LogStorage::LogStorage(LogStorageManager* manager, const QString& dir) : QObject(manager), storage_dir_(dir), write_thread_(new LogWriteThread(this)), sync_thread_(new LogSyncThread(this)), manager_(manager)
 {
-	QDir log_dir(dir);
-	unsigned int next_log_index = 0;
-
-	foreach(const QString& log_file, log_dir.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort))
-		next_log_index = qMax(next_log_index, log_file.mid(12, 4).toUInt());
-	next_log_index++;
-
-	current_log.setFileName(log_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
-	current_log.open(QIODevice::WriteOnly);
-
+	get_next_file();
 	sync_thread()->connect(this, SIGNAL(signal_sync()), SLOT(sync()));
 }
 
@@ -116,7 +116,33 @@ LogStorage::~LogStorage()
 	sync_thread()->wait();
 	delete sync_thread_;
 
-	current_log.close();
+	current_log_.close();
+}
+
+void LogStorage::get_next_file()
+{
+	QMutexLocker locker(&file_guard);
+	unsigned int next_log_index = 0;
+
+	foreach(const QString& log_file, storage_dir_.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort))
+		next_log_index = qMax(next_log_index, log_file.mid(12, 4).toUInt());
+	next_log_index++;
+
+	if (!storage_dir_.exists("asyncthrift.next.log")) {
+		alloc_thread_ = new LogAllocateThread(this);
+		alloc_thread_->start();
+		alloc_thread_->wait();
+	}
+
+	if (current_log_.isOpen())
+		current_log_.close();
+
+	current_log_.setFileName(storage_dir_.absoluteFilePath("asyncthrift.next.log"));
+	current_log_.rename(storage_dir_.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
+	current_log_.open(QIODevice::ReadWrite);
+
+	alloc_thread_ = new LogAllocateThread(this);
+	alloc_thread_->start();
 }
 
 void LogStorage::schedule_sync()
@@ -128,8 +154,29 @@ void LogStorage::sync()
 {
 	QMutexLocker locker(&file_guard);
 	LOG4CXX_DEBUG(logger, "Syncing storage");
-	if (current_log.handle() != -1)
-		fdatasync(current_log.handle());
+	if (current_log_.handle() != -1)
+		fdatasync(current_log_.handle());
+}
+
+void LogStorage::finished_allocation()
+{
+	delete alloc_thread_;
+	alloc_thread_ = 0;
+}
+
+LogAllocateThread::LogAllocateThread(LogStorage* storage) : storage(storage)
+{
+}
+
+void LogAllocateThread::run()
+{
+	QTemporaryFile tmp_file(storage->storage_dir()->absoluteFilePath("asyncthrift.next.log"));
+	tmp_file.setAutoRemove(false);
+	tmp_file.open();
+
+	if (posix_fallocate(tmp_file.handle(), 0, storage->manager()->max_log_size()))
+		LOG4CXX_WARN(logger, "Error allocating space for next LogFile");
+	tmp_file.rename(storage->storage_dir()->absoluteFilePath("asyncthrift.next.log"));
 }
 
 LogSyncThread::LogSyncThread(LogStorage* storage) : storage(storage)
@@ -184,15 +231,19 @@ void LogWriteThread::run()
 			buffer->commit_read(buf_transaction);
 		}
 
-		rounded_request_size = (request_size + sizeof(uint64_t) - 1) / sizeof(uint64_t);
-		transaction = LOG_ENDIAN((storage->manager()->transaction() * sizeof(uint64_t)) | rounded_request_size);
+		rounded_request_size = ((request_size + sizeof(uint64_t) - 1) / sizeof(uint64_t)) * sizeof(uint64_t);
+
+		if (storage->current_log()->pos() + sizeof(transaction) + rounded_request_size + sizeof(crc) >= storage->manager()->max_log_size())
+			storage->get_next_file();
+
+		// TODO: test that we write the whole buffer
+		transaction = LOG_ENDIAN((storage->manager()->transaction() * sizeof(uint64_t)) | (rounded_request_size / sizeof(uint64_t)));
 		crc = LOG_ENDIAN(lzma_crc64(reinterpret_cast<uint8_t*>(request), request_size, 0));
-		write(storage->handle(), &transaction, sizeof(transaction));
-		write(storage->handle(), request, request_size);
-		rounded_request_size *= sizeof(uint64_t);
+		storage->current_log()->write((const char*)&transaction, sizeof(transaction));
+		storage->current_log()->write((const char*)request, request_size);
 		if (rounded_request_size != request_size)
-			write(storage->handle(), padding_buffer, rounded_request_size - request_size);
-		write(storage->handle(), &crc, sizeof(crc));
+			storage->current_log()->write(padding_buffer, rounded_request_size - request_size);
+		storage->current_log()->write((const char*)&crc, sizeof(crc));
 		LOG4CXX_DEBUG(logger, "Log transaction");
 
 #if 0

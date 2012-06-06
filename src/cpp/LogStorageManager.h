@@ -24,6 +24,7 @@ public:
 	bool configure(unsigned int max_log_size, unsigned int sync_period, const QStringList& dirs);
 	uint64_t transaction() { return __sync_fetch_and_add(&cur_transaction, 1); }
 
+	size_t max_log_size() const;
 	AsyncHBase::HBaseClient* hbase_client();
 
 private:
