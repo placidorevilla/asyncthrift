@@ -25,17 +25,12 @@ DEPENDPATH += $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/src/common
 INCLUDEPATH += $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/src/common
 
 ALL_BUILD_SUBSTITUTES = $$BUILD_SUBSTITUTES $$BUILD_SUBSTITUTES_NOINSTALL
-for(sub, ALL_BUILD_SUBSTITUTES) {
-	name = $$replace(sub, "[./\\\\]", "_")
-	eval($${name}.input = $$sub)
-	eval($${name}.output = $$DESTDIR/$$replace(sub, "(.*)\\.in$", "\\1"))
-	QMAKE_SUBSTITUTES += $$name
-}
+QMAKE_SUBSTITUTES += $$ALL_BUILD_SUBSTITUTES
 
 for(file, BUILD_SUBSTITUTES) {
 	dir = $$dirname(file)
 	name = $$replace(dir, "[./\\\\]", "_")
-	file = $$DESTDIR/$$replace(file, "(.*)\\.in$", "\\1")
+	file = $$replace(file, "(.*)\\.in$", "\\1")
 	eval($${name}.path = $$INSTALLDIR/$$dir)
 	eval($${name}.files += $$file)
 	INSTALLS *= $$name
