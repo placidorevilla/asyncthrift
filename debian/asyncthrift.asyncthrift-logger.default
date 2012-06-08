@@ -1,0 +1,10 @@
+# Defaults for asyncthrift initscript
+# sourced by /etc/init.d/asyncthrift
+# installed at /etc/default/asyncthrift by the maintainer scripts
+
+#
+# This is a POSIX shell fragment
+#
+
+# Additional options that are passed to the Daemon.
+DAEMON_OPTS=""

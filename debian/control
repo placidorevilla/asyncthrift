@@ -1,0 +1,16 @@
+Source: asyncthrift
+Section: misc
+Priority: extra
+Maintainer: Placido Revilla <previlla@tuenti.com>
+Build-Depends: debhelper (>= 8.0.0), build-essential, qt4-qmake, sun-java6-jdk, libqt4-dev (>= 4.6.0), liblzma-dev, libdaemon-dev, libthrift-dev (>= 0.8.0), libevent-dev (>= 1.4.0), liblog4cxx10-dev (>= 0.10.0), curl, g++ (>= 4.5), libboost-dev | libboost1.40-dev
+Standards-Version: 3.9.2
+Homepage: http://www.tuenti.com/
+#Vcs-Git: ssh://hades/~/repo/asyncthrift
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/asyncthrift.git;a=summary
+
+Package: asyncthrift
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Asynchronous Thrift server for HBase
+ This is a fully asynchronous implementation of a Thrift server for HBase
+ It implements the same API of the original but in a more efficient way.
