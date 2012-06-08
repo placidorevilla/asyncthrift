@@ -14,7 +14,7 @@ JAVA_DEPS = \
 	java/zookeeper-3.3.4.jar.md5
 
 java_dep.input = JAVA_DEPS
-java_dep.output = $$TOP_BUILDDIR/target/$$PKGLIBDIR/java/${QMAKE_FILE_IN_BASE}
+java_dep.output = $$TOP_BUILDDIR/target/$$PKGDATADIR/java/${QMAKE_FILE_IN_BASE}
 java_dep.commands = curl -sS `cat ${QMAKE_FILE_IN} | cut -b 33-` -o ${QMAKE_FILE_OUT} && test `md5sum ${QMAKE_FILE_OUT} | awk \'{print \$$1;}\'` = `cat ${QMAKE_FILE_IN} | cut -b -32` || (rm ${QMAKE_FILE_OUT} && false)
 silent:java_dep.commands = @echo downloading ${QMAKE_FILE_OUT_BASE} && $$java_dep.commands
 java_dep.variable_out = PRE_TARGETDEPS
@@ -23,8 +23,8 @@ java_dep.CONFIG += no_link
 for(file, JAVA_DEPS) {
 	dir = $$dirname(file)
 	name = $$replace(dir, "[./\\\\]", "_")
-	file = $$TOP_BUILDDIR/target/$$PKGLIBDIR/$$replace(file, "(.*)\\.md5$", "\\1")
-	eval($${name}.path = $$PREFIX$$PKGLIBDIR/java/)
+	file = $$TOP_BUILDDIR/target/$$PKGDATADIR/$$replace(file, "(.*)\\.md5$", "\\1")
+	eval($${name}.path = $$PREFIX$$PKGDATADIR/java/)
 	eval($${name}.files += $$file)
 	eval($${name}.CONFIG = no_check_exist)
 	INSTALLS *= $$name

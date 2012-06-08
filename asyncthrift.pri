@@ -14,6 +14,8 @@ profile {
 QMAKE_CXXFLAGS += -std=gnu++0x -rdynamic $$OPTIMIZE_FLAGS $$PROFILE_CFLAGS
 QMAKE_CFLAGS += $$OPTIMIZE_FLAGS $$PROFILE_CFLAGS
 QMAKE_LFLAGS += $$PROFILE_LFLAGS
+# To avoid some warnings on thrift generated code
+QMAKE_CXXFLAGS_WARN_ON += -Wno-return-type
 
 ARCH = amd64
 JAVA_HOME = ${JAVA_HOME}
