@@ -12,12 +12,14 @@
 
 #include <signal.h>
 
+#include "config.h"
+
 const char* LOG4CXX_CONFIG_FILE = "log4cxx.xml";
 const char* ASYNCTHRIFT_CONFIG_FILE = "asyncthrift.ini";
 
 log4cxx::LoggerPtr AsyncThriftLogger::logger(log4cxx::Logger::getLogger(AsyncThriftLogger::staticMetaObject.className()));
 
-AsyncThriftLogger::AsyncThriftLogger(int& argc, char** argv) : TApplication(argc, argv), dispatcher_(0), config_dir(QDir("/etc/asyncthrift"))
+AsyncThriftLogger::AsyncThriftLogger(int& argc, char** argv) : TApplication(argc, argv), dispatcher_(0), config_dir(QDir(PKGSYSCONFDIR))
 {
 }
 

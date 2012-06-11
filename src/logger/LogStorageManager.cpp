@@ -11,10 +11,13 @@
 #include <QDir>
 #include <QMutexLocker>
 #include <QTemporaryFile>
+#include <QLocalSocket>
 
 #include <lzma.h>
 
 #include <fcntl.h>
+
+#include "config.h"
 
 log4cxx::LoggerPtr LogStorageManager::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
 log4cxx::LoggerPtr LogStorageManagerPrivate::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
@@ -22,10 +25,13 @@ log4cxx::LoggerPtr LogStorage::logger(log4cxx::Logger::getLogger(LogStorage::sta
 log4cxx::LoggerPtr LogWriteThread::logger(log4cxx::Logger::getLogger(LogWriteThread::staticMetaObject.className()));
 log4cxx::LoggerPtr LogSyncThread::logger(log4cxx::Logger::getLogger(LogSyncThread::staticMetaObject.className()));
 log4cxx::LoggerPtr LogAllocateThread::logger(log4cxx::Logger::getLogger(LogAllocateThread::staticMetaObject.className()));
+log4cxx::LoggerPtr LogReadThread::logger(log4cxx::Logger::getLogger(LogReadThread::staticMetaObject.className()));
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
 
-LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this)), cur_transaction(0)
+static const char* LOGGER_SOCKET_NAME = "logger";
+
+LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this))
 {
 }
 
@@ -41,6 +47,7 @@ bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_p
 	d->set_max_log_size(max_log_size);
 	d->create_storages(dirs);
 	d->set_sync_period(sync_period);
+	d->listen();
 
 	return true;
 }
@@ -57,6 +64,11 @@ LogStorageManagerPrivate::LogStorageManagerPrivate(LogStorageManager* manager) :
 
 LogStorageManagerPrivate::~LogStorageManagerPrivate()
 {
+	foreach (LogReadThread* read_thread, read_threads) {
+		read_thread->quit();
+		read_thread->wait();
+		delete read_thread;
+	}
 }
 
 void LogStorageManagerPrivate::create_storages(const QStringList& dirs)
@@ -73,6 +85,47 @@ void LogStorageManagerPrivate::create_storages(const QStringList& dirs)
 		storages.append(storage);
 	}
 }
+
+void LogStorageManagerPrivate::listen()
+{
+	if (!logger_server.isListening()) {
+		QDir server_dir(PKGSTATEDIR);
+
+		if (server_dir.exists(LOGGER_SOCKET_NAME))
+			server_dir.remove(LOGGER_SOCKET_NAME);
+
+		connect(&logger_server, SIGNAL(newConnection()), SLOT(new_logger_connection()));
+
+		logger_server.listen(server_dir.absoluteFilePath(LOGGER_SOCKET_NAME));
+	}
+}
+
+void LogStorageManagerPrivate::new_logger_connection()
+{
+	while (true) {
+		QLocalSocket* logger_connection = logger_server.nextPendingConnection();
+		if (!logger_connection)
+			break;
+
+		LogReadThread* read_thread = new LogReadThread(logger_connection, manager);
+		connect(read_thread, SIGNAL(finished()), SLOT(finished_logger_connection()));
+		read_threads.append(read_thread);
+		read_thread->start();
+	}
+}
+
+void LogStorageManagerPrivate::finished_logger_connection()
+{
+	LogReadThread* read_thread(qobject_cast<LogReadThread*>(sender()));
+
+	int item = read_threads.indexOf(read_thread);
+	
+	delete read_threads.at(item);
+	read_threads.remove(item);
+
+	LOG4CXX_DEBUG(logger, "Finished read thread");
+}
+
 void LogStorageManagerPrivate::set_sync_period(unsigned int sync_period)
 {
 	sync_timer.setInterval(sync_period / storages.size());
@@ -115,6 +168,7 @@ void LogStorage::get_next_file()
 	QMutexLocker locker(&file_guard);
 	unsigned int next_log_index = 0;
 
+	// TODO: define the file to transaction map
 	foreach(const QString& log_file, storage_dir_.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort))
 		next_log_index = qMax(next_log_index, log_file.mid(12, 4).toUInt());
 	next_log_index++;
@@ -264,5 +318,42 @@ void LogWriteThread::run()
 void LogWriteThread::quit()
 {
 	quitNow = true;
+}
+
+LogReadThread::LogReadThread(QLocalSocket* socket, LogStorageManager* manager) : socket(socket), manager(manager), stream(socket)
+{
+	moveToThread(this);
+	socket->setParent(0);
+	socket->moveToThread(this);
+	socket->setParent(this);
+}
+
+void LogReadThread::run()
+{
+	LOG4CXX_DEBUG(logger, "Start read thread");
+	connect(socket, SIGNAL(disconnected()), SLOT(quit()));
+	connect(socket, SIGNAL(readyRead()), SLOT(handle_ready_read()));
+
+	exec();
+
+	socket->close();
+}
+
+void LogReadThread::handle_ready_read()
+{
+	uint64_t transaction;
+	
+	if ((size_t)socket->bytesAvailable() < sizeof(transaction))
+		return;
+
+	disconnect(socket, SIGNAL(readyRead()), this, SLOT(handle_ready_read()));
+
+	stream.readRawData((char*)& transaction, sizeof(transaction));
+	transaction = LOG_ENDIAN(transaction);
+
+	LOG4CXX_DEBUG(logger, qPrintable(QString("Pending transaction %1").arg(transaction)));
+
+	// TODO: begin sending pending transactions until current
+	// TODO: begin iterating on bytesWritten waiting for bytesToWrite to be below a certain value to not overload the write buffer
 }
 

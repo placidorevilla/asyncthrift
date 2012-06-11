@@ -8,6 +8,7 @@
 #include <QTimer>
 #include <QMutex>
 #include <QDir>
+#include <QLocalServer>
 
 class LogStorageManager;
 class LogStorage;
@@ -68,6 +69,28 @@ private:
 	static log4cxx::LoggerPtr logger;
 };
 
+class LogReadThread : public QThread {
+	Q_OBJECT
+	Q_DISABLE_COPY(LogReadThread)
+
+public:
+	LogReadThread(QLocalSocket* socket, LogStorageManager* manager);
+//	virtual ~LogReadThread();
+
+protected:
+	virtual void run();
+
+private slots:
+	void handle_ready_read();
+
+private:
+	QLocalSocket* socket;
+	LogStorageManager* manager;
+	QDataStream stream;
+
+	static log4cxx::LoggerPtr logger;
+};
+
 class LogStorage : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogStorage)
@@ -120,15 +143,20 @@ public:
 	void set_sync_period(unsigned int sync_period);
 
 	void create_storages(const QStringList& dirs);
+	void listen();
 
 private slots:
 	void sync_timeout();
+	void new_logger_connection();
+	void finished_logger_connection();
 
 private:
 	LogStorageManager* manager;
 	unsigned int max_log_size_;
 	QList<LogStorage*> storages;
 	QTimer sync_timer;
+	QLocalServer logger_server;
+	QVector<LogReadThread*> read_threads;
 
 	static log4cxx::LoggerPtr logger;
 };

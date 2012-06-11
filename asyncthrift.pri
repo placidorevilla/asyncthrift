@@ -1,6 +1,7 @@
 CONFIG += debug warn_on link_pkgconfig nostrip
 #CONFIG += silent
 QT -= gui
+QT += network
 
 release {
 	OPTIMIZE_FLAGS = -O3 -march=native -fomit-frame-pointer -mfpmath=sse
@@ -23,8 +24,8 @@ JAVAC = $$JAVA_HOME/bin/javac
 
 PKGCONFIG += libdaemon liblog4cxx
 
-DEPENDPATH += $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/src/common
-INCLUDEPATH += $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/src/common
+DEPENDPATH += $$TOP_BUILDDIR $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/src/common
+INCLUDEPATH += $$TOP_BUILDDIR $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/src/common
 
 ALL_BUILD_SUBSTITUTES = $$BUILD_SUBSTITUTES $$BUILD_SUBSTITUTES_NOINSTALL
 QMAKE_SUBSTITUTES += $$ALL_BUILD_SUBSTITUTES
