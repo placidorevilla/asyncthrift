@@ -58,13 +58,14 @@ class LogAllocateThread : public QThread {
 	Q_DISABLE_COPY(LogAllocateThread)
 
 public:
-	explicit LogAllocateThread(LogStorage* storage);
+	LogAllocateThread(const QString& dir, size_t size);
 
 protected:
 	virtual void run();
 
 private:
-	LogStorage* storage;
+	QString dir;
+	size_t size;
 
 	static log4cxx::LoggerPtr logger;
 };
@@ -75,7 +76,6 @@ class LogReadThread : public QThread {
 
 public:
 	LogReadThread(QLocalSocket* socket, LogStorageManager* manager);
-//	virtual ~LogReadThread();
 
 protected:
 	virtual void run();
@@ -95,37 +95,30 @@ class LogStorage : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogStorage)
 
+	friend class LogSyncThread;
+	friend class LogWriteThread;
+
 public:
 	LogStorage(LogStorageManager* manager, const QString& dir);
 	~LogStorage();
 
-	LogWriteThread* write_thread() const { return write_thread_; }
-	LogSyncThread* sync_thread() const { return sync_thread_; }
-
-	void schedule_sync();
-	void sync();
-
+private:
 	void get_next_file();
-
-	QFile* current_log() { return &current_log_; }
-	LogStorageManager* manager() { return manager_; }
-	QDir* storage_dir() { return &storage_dir_; }
-
-signals:
-	void signal_sync();
+	void write(void* buffer, size_t size);
 
 private slots:
+	void sync();
 	void finished_allocation();
 
 private:
-	QDir storage_dir_;
-	QFile current_log_;
+	QDir storage_dir;
+	QFile current_log;
 	QMutex file_guard;
 	QMap<int, QPair<uint64_t, uint64_t> > file_to_transaction_map;
-	LogWriteThread* write_thread_;
-	LogSyncThread* sync_thread_;
-	LogAllocateThread* alloc_thread_;
-	LogStorageManager* manager_;
+	LogWriteThread* write_thread;
+	LogSyncThread* sync_thread;
+	LogAllocateThread* alloc_thread;
+	LogStorageManager* manager;
 
 	static log4cxx::LoggerPtr logger;
 };
