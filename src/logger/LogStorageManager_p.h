@@ -120,11 +120,12 @@ private slots:
 private:
 	QDir storage_dir_;
 	QFile current_log_;
+	QMutex file_guard;
+	QMap<int, QPair<uint64_t, uint64_t> > file_to_transaction_map;
 	LogWriteThread* write_thread_;
 	LogSyncThread* sync_thread_;
 	LogAllocateThread* alloc_thread_;
 	LogStorageManager* manager_;
-	QMutex file_guard;
 
 	static log4cxx::LoggerPtr logger;
 };

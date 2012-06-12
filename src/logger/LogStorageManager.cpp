@@ -166,11 +166,41 @@ LogStorage::~LogStorage()
 void LogStorage::get_next_file()
 {
 	QMutexLocker locker(&file_guard);
-	unsigned int next_log_index = 0;
+	int next_log_index = -1;
 
-	// TODO: define the file to transaction map
-	foreach(const QString& log_file, storage_dir_.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort))
-		next_log_index = qMax(next_log_index, log_file.mid(12, 4).toUInt());
+	foreach(const QString& log_filename, storage_dir_.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort)) {
+		int log_index = log_filename.mid(12, 4).toInt();
+		next_log_index = qMax(next_log_index, log_index);
+		if (file_to_transaction_map.contains(log_index))
+			continue;
+		QFile log_file(storage_dir_.absoluteFilePath(log_filename));
+		log_file.open(QIODevice::ReadOnly);
+		uint64_t transaction, first_good_transaction = 0, last_good_transaction = 0;
+		uint64_t timestamp_and_len;
+		if (log_file.read((char*)&transaction, sizeof(transaction)) != sizeof(transaction)) {
+			LOG4CXX_WARN(logger, qPrintable(QString("Corrupt log file: '%1'").arg(log_file.fileName())));
+		} else {
+			first_good_transaction = transaction = LOG_ENDIAN(transaction);
+			LOG4CXX_INFO(logger, qPrintable(QString("First good transaction for file '%1' is %2").arg(log_file.fileName()).arg(first_good_transaction)));
+			while(transaction != 0) {
+				last_good_transaction = transaction;
+				if (log_file.read((char*)&timestamp_and_len, sizeof(timestamp_and_len)) != sizeof(timestamp_and_len))
+					break;
+				timestamp_and_len = LOG_ENDIAN(timestamp_and_len);
+				if (!log_file.seek(log_file.pos() + (timestamp_and_len >> (sizeof(uint32_t) * 8)) + sizeof(uint64_t)))
+					break;
+				if (log_file.read((char*)&transaction, sizeof(transaction)) != sizeof(transaction))
+					break;
+				transaction = LOG_ENDIAN(transaction);
+			}
+			LOG4CXX_INFO(logger, qPrintable(QString("Last good transaction for file '%1' is %2").arg(log_file.fileName()).arg(last_good_transaction)));
+			file_to_transaction_map.insert(log_index, qMakePair(first_good_transaction, last_good_transaction));
+			if (last_good_transaction != 0)
+				manager()->transaction(last_good_transaction);
+		}
+
+		log_file.close();
+	}
 	next_log_index++;
 
 	if (!storage_dir_.exists("asyncthrift.next.log")) {
@@ -254,12 +284,17 @@ void LogWriteThread::run()
 	size_t request_size, rounded_request_size;
 	unsigned long buf_transaction;
 	void* request;
-	char local_buffer[4096];
+	char local_buffer[4];
 	char padding_buffer[sizeof(uint64_t)];
 	uint64_t transaction;
 	uint64_t crc;
+	uint64_t timestamp_and_len;
+
+	memset(padding_buffer, 0, sizeof(padding_buffer));
 
 	while (true) {
+		time_t now = time(NULL);
+
 		request = buffer->fetch_read(&request_size, &buf_transaction, RINGBUFFER_READ_TIMEOUT);
 		if (!request) {
 			QCoreApplication::processEvents();
@@ -281,14 +316,19 @@ void LogWriteThread::run()
 		if (storage->current_log()->pos() + sizeof(transaction) + rounded_request_size + sizeof(crc) >= storage->manager()->max_log_size())
 			storage->get_next_file();
 
-		// TODO: test that we write the whole buffer
-		transaction = LOG_ENDIAN((storage->manager()->transaction() * sizeof(uint64_t)) | (rounded_request_size / sizeof(uint64_t)));
+		transaction = LOG_ENDIAN(storage->manager()->transaction());
+//		printf("tx: %lu\n", LOG_ENDIAN(transaction));
+		timestamp_and_len = LOG_ENDIAN(((uint32_t) now) | (rounded_request_size << (sizeof(uint32_t) * 8)));
+//		printf("ts: %x, size: %x, val: %lx\n", (uint32_t) now, (uint32_t) rounded_request_size, timestamp_and_len);
 		crc = LOG_ENDIAN(lzma_crc64(reinterpret_cast<uint8_t*>(request), request_size, 0));
 		storage->current_log()->write((const char*)&transaction, sizeof(transaction));
-		storage->current_log()->write((const char*)request, request_size);
+		storage->current_log()->write((const char*)&timestamp_and_len, sizeof(timestamp_and_len));
+		if ((size_t)storage->current_log()->write((const char*)request, request_size) != request_size)
+			LOG4CXX_ERROR(logger, "Short write on log. This will CORRUPT the log file!");
 		if (rounded_request_size != request_size)
 			storage->current_log()->write(padding_buffer, rounded_request_size - request_size);
 		storage->current_log()->write((const char*)&crc, sizeof(crc));
+		storage->current_log()->flush();
 		LOG4CXX_DEBUG(logger, "Log transaction");
 
 #if 0
