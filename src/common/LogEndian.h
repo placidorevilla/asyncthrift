@@ -1,10 +1,9 @@
 #ifndef LOG_ENDIAN_H
 #define LOG_ENDIAN_H
 
-#include <QtGlobal>
 #include <byteswap.h>
 
-#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define LOG_ENDIAN(x) (x)
 #else
 #define LOG_ENDIAN(x) (bswap(x))

@@ -66,14 +66,14 @@ size_t SerializableHBaseOperation::MutateRows::size(bool deletes)
 	size += size_smalltext(tableName); // Table
 	size += sizeof(uint8_t); // Number of rows
 
-	for (std::vector<BatchMutation>::const_iterator batch_mutation = row_batches.begin(); batch_mutation != row_batches.end(); batch_mutation++) {
+	for (auto batch_mutation = row_batches.begin(); batch_mutation != row_batches.end(); batch_mutation++) {
 		size_t ops_size = 0;
 		std::map<std::string, std::vector<const Mutation*> > families;
 
 		ops_size += size_bigtext(batch_mutation->row); // RowKey
 		ops_size += sizeof(uint8_t); // Number of families
 
-		for (std::vector<Mutation>::const_iterator mutation = batch_mutation->mutations.begin(); mutation != batch_mutation->mutations.end(); mutation++) {
+		for (auto mutation = batch_mutation->mutations.begin(); mutation != batch_mutation->mutations.end(); mutation++) {
 			if (!((mutation->isDelete && deletes) || (!mutation->isDelete && !deletes)))
 				continue;
 
@@ -90,7 +90,7 @@ size_t SerializableHBaseOperation::MutateRows::size(bool deletes)
 			if (!deletes)
 				ops_size += size_bigtext(mutation->value); // Value
 
-			std::map<std::string, std::vector<const Mutation*> >::iterator i = families.find(family);
+			auto i = families.find(family);
 			if (i != families.end()) {
 				i->second.push_back(&*mutation);
 			} else {
@@ -100,7 +100,7 @@ size_t SerializableHBaseOperation::MutateRows::size(bool deletes)
 			}
 		}
 
-		for (std::map<std::string, std::vector<const Mutation*> >::const_iterator i = families.begin(); i != families.end(); i++) {
+		for (auto i = families.begin(); i != families.end(); i++) {
 			ops_size += size_smalltext(i->first); // Family
 			ops_size += sizeof(uint8_t); // Number of qualifiers
 		}
@@ -130,8 +130,8 @@ void SerializableHBaseOperation::MutateRows::serialize(void* buffer_, bool delet
 	serialize_smalltext(&buffer, tableName);
 	serialize_integer(&buffer, num_rows);
 
-	std::vector<BatchMutation>::const_iterator batch_mutation = row_batches.begin();
-	std::vector<std::map<std::string, std::vector<const Mutation*> > >::const_iterator families = families_per_row.begin();
+	auto batch_mutation = row_batches.begin();
+	auto families = families_per_row.begin();
 	for (; batch_mutation != row_batches.end(); batch_mutation++, families++) {
 		if (families->size() == 0)
 			continue;
@@ -140,12 +140,12 @@ void SerializableHBaseOperation::MutateRows::serialize(void* buffer_, bool delet
 		serialize_bigtext(&buffer, batch_mutation->row);
 		serialize_integer(&buffer, (uint8_t)families->size());
 
-		for (std::map<std::string, std::vector<const Mutation*> >::const_iterator family = families->begin(); family != families->end(); family++) {
+		for (auto family = families->begin(); family != families->end(); family++) {
 //			printf("\t\tfamily '%s' (%u qualifiers)\n", family->first.c_str(), (uint8_t)family->second.size());
 			serialize_smalltext(&buffer, family->first);
 			serialize_integer(&buffer, (uint8_t)family->second.size());
 
-			for (std::vector<const Mutation*>::const_iterator qualifier = family->second.begin(); qualifier != family->second.end(); qualifier++) {
+			for (auto qualifier = family->second.begin(); qualifier != family->second.end(); qualifier++) {
 				size_t pos = (*qualifier)->column.find_first_of(':');
 //				printf("\t\t\tqualifier '%s' value '%s' timestamp %lld\n", (*qualifier)->column.substr(pos + 1).c_str(), (*qualifier)->value.c_str(), (int64_t)timestamp);
 				serialize_smalltext(&buffer, (*qualifier)->column.substr(pos + 1));

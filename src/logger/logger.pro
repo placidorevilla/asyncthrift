@@ -28,7 +28,6 @@ HEADERS += \
 	ThriftDispatcher.h \
 	LogStorageManager.h \
 	LogStorageManager_p.h \
-	LogEndian.h \
 	HBaseOperations.h
 
 SOURCES += \
