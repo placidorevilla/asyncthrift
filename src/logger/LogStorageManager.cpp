@@ -148,7 +148,6 @@ void LogStorageManagerPrivate::sync_timeout()
 LogStorage::LogStorage(LogStorageManager* manager, const QString& dir) : QObject(manager), storage_dir(dir), write_thread(new LogWriteThread(this)), sync_thread(new LogSyncThread(this)), manager(manager)
 {
 	get_next_file();
-	sync_thread->connect(this, SIGNAL(signal_sync()), SLOT(sync()));
 }
 
 LogStorage::~LogStorage()
@@ -163,6 +162,42 @@ LogStorage::~LogStorage()
 	current_log.close();
 }
 
+void LogStorage::map_log_file(int log_index)
+{
+	if (invalid_files_map.contains(log_index))
+		return;
+
+	QFile log_file(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(log_index, 4, 10, QChar('0'))));
+	log_file.open(QIODevice::ReadOnly);
+	uint64_t transaction, first_good_transaction = 0, last_good_transaction = 0;
+	uint64_t timestamp_and_len;
+	if (log_file.read((char*)&transaction, sizeof(transaction)) != sizeof(transaction)) {
+		LOG4CXX_WARN(logger, qPrintable(QString("Corrupt log file: '%1'").arg(log_file.fileName())));
+	} else {
+		first_good_transaction = transaction = LOG_ENDIAN(transaction);
+		LOG4CXX_INFO(logger, qPrintable(QString("First good transaction for file '%1' is %2").arg(log_file.fileName()).arg(first_good_transaction)));
+		while(transaction != 0) {
+			last_good_transaction = transaction;
+			if (log_file.read((char*)&timestamp_and_len, sizeof(timestamp_and_len)) != sizeof(timestamp_and_len))
+				break;
+			timestamp_and_len = LOG_ENDIAN(timestamp_and_len);
+			if (!log_file.seek(log_file.pos() + (timestamp_and_len >> (sizeof(uint32_t) * 8)) + sizeof(uint64_t)))
+				break;
+			if (log_file.read((char*)&transaction, sizeof(transaction)) != sizeof(transaction))
+				break;
+			transaction = LOG_ENDIAN(transaction);
+		}
+		LOG4CXX_INFO(logger, qPrintable(QString("Last good transaction for file '%1' is %2").arg(log_file.fileName()).arg(last_good_transaction)));
+		if (first_good_transaction != 0) {
+			file_to_transaction_map.insert(log_index, qMakePair(first_good_transaction, last_good_transaction));
+		} else {
+			file_to_transaction_map.remove(log_index);
+			invalid_files_map.insert(log_index);
+		}
+		log_file.close();
+	}
+}
+
 void LogStorage::get_next_file()
 {
 	QMutexLocker locker(&file_guard);
@@ -171,36 +206,23 @@ void LogStorage::get_next_file()
 	foreach(const QString& log_filename, storage_dir.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort)) {
 		int log_index = log_filename.mid(12, 4).toInt();
 		next_log_index = qMax(next_log_index, log_index);
-		if (file_to_transaction_map.contains(log_index))
-			continue;
-		QFile log_file(storage_dir.absoluteFilePath(log_filename));
-		log_file.open(QIODevice::ReadOnly);
-		uint64_t transaction, first_good_transaction = 0, last_good_transaction = 0;
-		uint64_t timestamp_and_len;
-		if (log_file.read((char*)&transaction, sizeof(transaction)) != sizeof(transaction)) {
-			LOG4CXX_WARN(logger, qPrintable(QString("Corrupt log file: '%1'").arg(log_file.fileName())));
-		} else {
-			first_good_transaction = transaction = LOG_ENDIAN(transaction);
-			LOG4CXX_INFO(logger, qPrintable(QString("First good transaction for file '%1' is %2").arg(log_file.fileName()).arg(first_good_transaction)));
-			while(transaction != 0) {
-				last_good_transaction = transaction;
-				if (log_file.read((char*)&timestamp_and_len, sizeof(timestamp_and_len)) != sizeof(timestamp_and_len))
-					break;
-				timestamp_and_len = LOG_ENDIAN(timestamp_and_len);
-				if (!log_file.seek(log_file.pos() + (timestamp_and_len >> (sizeof(uint32_t) * 8)) + sizeof(uint64_t)))
-					break;
-				if (log_file.read((char*)&transaction, sizeof(transaction)) != sizeof(transaction))
-					break;
-				transaction = LOG_ENDIAN(transaction);
-			}
-			LOG4CXX_INFO(logger, qPrintable(QString("Last good transaction for file '%1' is %2").arg(log_file.fileName()).arg(last_good_transaction)));
-			file_to_transaction_map.insert(log_index, qMakePair(first_good_transaction, last_good_transaction));
-			if (last_good_transaction != 0)
-				manager->transaction(last_good_transaction);
-		}
-
-		log_file.close();
+		if (!file_to_transaction_map.contains(log_index) && !invalid_files_map.contains(log_index))
+			file_to_transaction_map.insert(log_index, qMakePair(0UL, 0UL));
 	}
+
+	QList<int> known_files = file_to_transaction_map.keys();
+	for (auto log_index = known_files.end();;) {
+		if (log_index == known_files.begin())
+			break;
+		log_index--;
+		if (file_to_transaction_map[*log_index].first == 0)
+			map_log_file(*log_index);
+		if (file_to_transaction_map.contains(*log_index)) {
+			manager->transaction(file_to_transaction_map[*log_index].second);
+			break;
+		}
+	}
+
 	next_log_index++;
 
 	if (!storage_dir.exists("asyncthrift.next.log")) {

@@ -103,6 +103,7 @@ public:
 	~LogStorage();
 
 private:
+	void map_log_file(int log_index);
 	void get_next_file();
 	void write(void* buffer, size_t size);
 
@@ -115,6 +116,7 @@ private:
 	QFile current_log;
 	QMutex file_guard;
 	QMap<int, QPair<uint64_t, uint64_t> > file_to_transaction_map;
+	QSet<int> invalid_files_map;
 	LogWriteThread* write_thread;
 	LogSyncThread* sync_thread;
 	LogAllocateThread* alloc_thread;
