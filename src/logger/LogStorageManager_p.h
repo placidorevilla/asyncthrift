@@ -12,7 +12,7 @@
 #include <QDir>
 #include <QLocalServer>
 
-class LogStorageManager;
+class LogStorageManagerPrivate;
 class LogStorage;
 class NBRingByteBuffer;
 
@@ -77,7 +77,7 @@ class LogReadThread : public QThread {
 	Q_DISABLE_COPY(LogReadThread)
 
 public:
-	LogReadThread(QLocalSocket* socket, LogStorageManager* manager);
+	LogReadThread(QLocalSocket* socket, LogStorageManagerPrivate* manager);
 
 protected:
 	virtual void run();
@@ -87,10 +87,21 @@ private slots:
 
 private:
 	QLocalSocket* socket;
-	LogStorageManager* manager;
+	LogStorageManagerPrivate* manager;
 	QDataStream stream;
+	uint64_t transaction;
 
 	static log4cxx::LoggerPtr logger;
+};
+
+class LogReadContext {
+public:
+	explicit LogReadContext(LogStorageManagerPrivate* manager) : manager(manager) {}
+
+	bool read_next_transaction(char** buffer, size_t* size);
+
+private:
+	LogStorageManagerPrivate* manager;
 };
 
 class LogStorage : public QObject {
@@ -101,7 +112,7 @@ class LogStorage : public QObject {
 	friend class LogWriteThread;
 
 public:
-	LogStorage(LogStorageManager* manager, const QString& dir);
+	LogStorage(LogStorageManagerPrivate* manager, const QString& dir);
 	~LogStorage();
 
 private:
@@ -122,7 +133,7 @@ private:
 	LogWriteThread* write_thread;
 	LogSyncThread* sync_thread;
 	LogAllocateThread* alloc_thread;
-	LogStorageManager* manager;
+	LogStorageManagerPrivate* manager;
 
 	static log4cxx::LoggerPtr logger;
 };
@@ -132,7 +143,7 @@ class LogStorageManagerPrivate : public QObject {
 	Q_DISABLE_COPY(LogStorageManagerPrivate)
 
 public:
-	LogStorageManagerPrivate(LogStorageManager* manager);
+	LogStorageManagerPrivate(QObject* parent);
 	~LogStorageManagerPrivate();
 
 	unsigned int max_log_size() const { return max_log_size_; }
@@ -143,13 +154,18 @@ public:
 	void create_storages(const QStringList& dirs);
 	void listen();
 
+	uint64_t transaction(uint64_t new_transaction = 0);
+
+	LogReadContext* begin_read(uint64_t transaction);
+	void end_read(LogReadContext* context);
+	bool read_next_transaction(LogReadContext* context, char** buffer, size_t* size);
+
 private slots:
 	void sync_timeout();
 	void new_logger_connection();
 	void finished_logger_connection();
 
 private:
-	LogStorageManager* manager;
 	unsigned int max_log_size_;
 	QList<LogStorage*> storages;
 	QTimer sync_timer;
