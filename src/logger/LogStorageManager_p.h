@@ -1,6 +1,8 @@
 #ifndef LOGSTORAGEMANAGER_P_H
 #define LOGSTORAGEMANAGER_P_H
 
+#include "TMemFile.h"
+
 #include <log4cxx/logger.h>
 
 #include <QThread>
@@ -113,7 +115,7 @@ private slots:
 
 private:
 	QDir storage_dir;
-	QFile current_log;
+	TMemFile current_log;
 	QMutex file_guard;
 	QMap<int, QPair<uint64_t, uint64_t> > file_to_transaction_map;
 	QSet<int> invalid_files_map;

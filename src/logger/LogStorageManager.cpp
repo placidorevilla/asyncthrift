@@ -167,15 +167,15 @@ void LogStorage::map_log_file(int log_index)
 	if (invalid_files_map.contains(log_index))
 		return;
 
-	QFile log_file(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(log_index, 4, 10, QChar('0'))));
+	TMemFile log_file(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(log_index, 4, 10, QChar('0'))));
 	log_file.open(QIODevice::ReadOnly);
 	uint64_t transaction, first_good_transaction = 0, last_good_transaction = 0;
 	uint64_t timestamp_and_len;
 	if (log_file.read((char*)&transaction, sizeof(transaction)) != sizeof(transaction)) {
-		LOG4CXX_WARN(logger, qPrintable(QString("Corrupt log file: '%1'").arg(log_file.fileName())));
+		LOG4CXX_WARN(logger, qPrintable(QString("Corrupt log file: '%1'").arg(log_file.file()->fileName())));
 	} else {
 		first_good_transaction = transaction = LOG_ENDIAN(transaction);
-		LOG4CXX_INFO(logger, qPrintable(QString("First good transaction for file '%1' is %2").arg(log_file.fileName()).arg(first_good_transaction)));
+		LOG4CXX_INFO(logger, qPrintable(QString("First good transaction for file '%1' is %2").arg(log_file.file()->fileName()).arg(first_good_transaction)));
 		while(transaction != 0) {
 			last_good_transaction = transaction;
 			if (log_file.read((char*)&timestamp_and_len, sizeof(timestamp_and_len)) != sizeof(timestamp_and_len))
@@ -187,7 +187,7 @@ void LogStorage::map_log_file(int log_index)
 				break;
 			transaction = LOG_ENDIAN(transaction);
 		}
-		LOG4CXX_INFO(logger, qPrintable(QString("Last good transaction for file '%1' is %2").arg(log_file.fileName()).arg(last_good_transaction)));
+		LOG4CXX_INFO(logger, qPrintable(QString("Last good transaction for file '%1' is %2").arg(log_file.file()->fileName()).arg(last_good_transaction)));
 		if (first_good_transaction != 0) {
 			file_to_transaction_map.insert(log_index, qMakePair(first_good_transaction, last_good_transaction));
 		} else {
@@ -234,8 +234,8 @@ void LogStorage::get_next_file()
 	if (current_log.isOpen())
 		current_log.close();
 
-	current_log.setFileName(storage_dir.absoluteFilePath("asyncthrift.next.log"));
-	current_log.rename(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
+	current_log.file()->setFileName(storage_dir.absoluteFilePath("asyncthrift.next.log"));
+	current_log.file()->rename(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
 	current_log.open(QIODevice::ReadWrite);
 
 	alloc_thread = new LogAllocateThread(storage_dir.canonicalPath(), manager->max_log_size());
@@ -246,8 +246,7 @@ void LogStorage::sync()
 {
 	QMutexLocker locker(&file_guard);
 	LOG4CXX_DEBUG(logger, "Syncing storage");
-	if (current_log.handle() != -1)
-		fdatasync(current_log.handle());
+	current_log.sync();
 }
 
 void LogStorage::finished_allocation()
@@ -267,7 +266,7 @@ void LogStorage::write(void* buffer, size_t size)
 
 	rounded_size = ((size + sizeof(uint64_t) - 1) / sizeof(uint64_t)) * sizeof(uint64_t);
 
-	if (current_log.pos() + sizeof(transaction) + rounded_size + sizeof(crc) >= manager->max_log_size())
+	if (qint64(current_log.pos() + sizeof(transaction) + rounded_size + sizeof(crc)) >= current_log.size())
 		get_next_file();
 
 	transaction = LOG_ENDIAN(manager->transaction());
@@ -282,7 +281,6 @@ void LogStorage::write(void* buffer, size_t size)
 	if (rounded_size != size)
 		current_log.write(padding_buffer, rounded_size - size);
 	current_log.write((const char*)&crc, sizeof(crc));
-	current_log.flush();
 	LOG4CXX_DEBUG(logger, "Log transaction");
 }
 
@@ -332,7 +330,7 @@ void LogWriteThread::run()
 	void* request;
 	size_t request_size;
 	unsigned long buf_transaction;
-	char local_buffer[4];
+	char local_buffer[4096];
 
 	while (true) {
 		request = buffer->fetch_read(&request_size, &buf_transaction, RINGBUFFER_READ_TIMEOUT);
