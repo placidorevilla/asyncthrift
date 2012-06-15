@@ -16,6 +16,9 @@ set -e
 
 case "$1" in
     install|upgrade)
+		if ! getent passwd asyncthrift >/dev/null; then
+			adduser --quiet --system --group --home /var/lib/asyncthrift --gecos "AsyncThrift user" --shell /bin/false asyncthrift
+		fi
     ;;
 
     abort-upgrade)

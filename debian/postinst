@@ -20,8 +20,9 @@ set -e
 
 case "$1" in
     configure)
-		mkdir -p /var/log/asyncthrift
-		mkdir -p /var/lib/asyncthrift
+		for dir in log lib run; do
+			install -d -m 0755 -o asyncthrift -g asyncthrift /var/$dir/asyncthrift
+		done
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

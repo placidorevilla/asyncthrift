@@ -7,4 +7,5 @@
 #
 
 # Additional options that are passed to the Daemon.
-DAEMON_OPTS=""
+ASYNCTHRIFT_CONFIG_DIR="/etc/asyncthrift"
+ASYNCTHRIFT_USER="asyncthrift"
