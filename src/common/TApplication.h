@@ -17,7 +17,7 @@ public:
 
 protected:
 	virtual bool init();
-	bool init(const QList<int>& hsignals);
+	bool init(const QList<int>& hsignals, bool daemonize = false, const QString& user = QString(), const char* ident = "");
 	virtual int run();
 	virtual void signal_received(int signo);
 
@@ -26,6 +26,7 @@ private slots:
 
 private:
 	QSocketNotifier *daemon_signal_notifier;
+	bool daemonized;
 };
 
 #endif // TAPPLICATION_H

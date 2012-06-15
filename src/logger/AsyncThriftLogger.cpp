@@ -37,12 +37,16 @@ bool AsyncThriftLogger::init()
 		QtArgCmdLine cmdline;
 
 		QtArg config('c', "config", "Configuration directory override", false, true);
+		QtArg daemonize('d', "daemonize", "Daemonize on start", false, false);
+		QtArg user('u', "user", "Run as the given user", false, true);
 
 		QtArgHelp help(&cmdline);
 		help.printer()->setProgramDescription("Thrift asynchronous server logger.");
 		help.printer()->setExecutableName(this->applicationName());
 
 		cmdline.addArg(&config);
+		cmdline.addArg(&daemonize);
+		cmdline.addArg(&user);
 		cmdline.addArg(help);
 		cmdline.parse();
 
@@ -53,6 +57,11 @@ bool AsyncThriftLogger::init()
 			LOG4CXX_ERROR(logger, "Invalid configuration directory: " << qPrintable(config_dir.path()));
 			return false;
 		}
+
+		config_dir.makeAbsolute();
+
+		if (!TApplication::init(QList<int>() << SIGINT << SIGTERM << SIGHUP, daemonize.isPresent(), user.value().toString(), "asyncthrift/logger"))
+			return false;
 	} catch (const QtArgHelpHasPrintedEx& ex) {
 		return false;
 	} catch (const QtArgBaseException& ex) {
@@ -63,9 +72,6 @@ bool AsyncThriftLogger::init()
 	dispatcher_ = new ThriftDispatcher;
 
 	if (!reloadConfig())
-		return false;
-
-	if (!TApplication::init(QList<int>() << SIGINT << SIGTERM << SIGHUP))
 		return false;
 
 	return true;

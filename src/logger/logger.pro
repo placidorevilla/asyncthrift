@@ -17,6 +17,7 @@ INSTALLS += target
 QMAKE_CLEAN += ${TARGET}
 
 LIBS += -L$$TOP_BUILDDIR/src/common/ -lcommon
+PRE_TARGETDEPS = $$TOP_BUILDDIR/src/common/libcommon.a
 
 HEADERS += \
 	gen-cpp/Hbase_types.h \
