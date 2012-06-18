@@ -66,15 +66,33 @@ LogStorageManagerPrivate::~LogStorageManagerPrivate()
 
 void LogStorageManagerPrivate::create_storages(const QStringList& dirs)
 {
-	// TODO: Check if the storages definition has changed actually
+	QSet<QString> unique_storages;
+
+	foreach (const QString& dir, dirs) {
+		QString canonical = QDir(dir).canonicalPath();
+		if (unique_storages.contains(canonical)) {
+			LOG4CXX_WARN(logger, "Configuration has repeated logging dirs. Ignoring.");
+			continue;
+		}
+		unique_storages.insert(canonical);
+	}
+
 	if (storages.size() != 0) {
-		LOG4CXX_WARN(logger, "Cannot reconfigure storages while running");
+		foreach (LogStorage* storage, storages) {
+			QString dir(storage->path());
+			if (!unique_storages.contains(dir)) {
+				LOG4CXX_WARN(logger, "Cannot reconfigure storages while running");
+				return;
+			}
+			unique_storages.remove(dir);
+		}
+		if (!unique_storages.isEmpty())
+			LOG4CXX_WARN(logger, "Cannot reconfigure storages while running");
 		return;
 	}
 
-	// TODO: Check that the dirs are not repeated
-	foreach(const QString& dir, dirs) {
-		LogStorage* storage = new LogStorage(this, dir);
+	for (auto canonical = unique_storages.begin(); canonical != unique_storages.end(); canonical++) {
+		LogStorage* storage = new LogStorage(this, *canonical);
 		storages.append(storage);
 	}
 }
@@ -178,7 +196,7 @@ bool LogReadContext::read_next_transaction(char** buffer, size_t* size)
 	return true;
 }
 
-LogStorage::LogStorage(LogStorageManagerPrivate* manager, const QString& dir) : QObject(manager), storage_dir(dir), write_thread(new LogWriteThread(this)), sync_thread(new LogSyncThread(this)), manager(manager)
+LogStorage::LogStorage(LogStorageManagerPrivate* manager, const QString& dir) : QObject(manager), storage_dir(dir), write_thread(new LogWriteThread(this)), sync_thread(new LogSyncThread(this)), manager(manager), need_sync(false)
 {
 	get_next_file();
 }
@@ -256,6 +274,18 @@ void LogStorage::get_next_file()
 		}
 	}
 
+	// If the most recent log file is empty use it instead of creating a new one
+	if (!invalid_files_map.isEmpty()) {
+		int potential_index = *std::max_element(invalid_files_map.begin(), invalid_files_map.end());
+		if (file_to_transaction_map.isEmpty() || (file_to_transaction_map.end() - 1).key() < potential_index) {
+			if (current_log.isOpen())
+				current_log.close();
+			current_log.file()->setFileName(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(potential_index, 4, 10, QChar('0'))));
+			current_log.open(QIODevice::ReadWrite);
+			return;
+		}
+	}
+
 	next_log_index++;
 
 	if (!storage_dir.exists("asyncthrift.next.log")) {
@@ -277,9 +307,13 @@ void LogStorage::get_next_file()
 
 void LogStorage::sync()
 {
+	__sync_synchronize();
+	if (!need_sync)
+		return;
 	QMutexLocker locker(&file_guard);
 	LOG4CXX_DEBUG(logger, "Syncing storage");
 	current_log.sync();
+	need_sync = false;
 }
 
 void LogStorage::finished_allocation()
@@ -314,6 +348,8 @@ void LogStorage::write(void* buffer, size_t size)
 	if (rounded_size != size)
 		current_log.write(padding_buffer, rounded_size - size);
 	current_log.write((const char*)&crc, sizeof(crc));
+
+	need_sync = true;
 	LOG4CXX_DEBUG(logger, "Log transaction");
 }
 

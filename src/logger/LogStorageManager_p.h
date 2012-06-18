@@ -115,6 +115,8 @@ public:
 	LogStorage(LogStorageManagerPrivate* manager, const QString& dir);
 	~LogStorage();
 
+	QString path() const { return storage_dir.path(); }
+
 private:
 	void map_log_file(int log_index);
 	void get_next_file();
@@ -134,6 +136,7 @@ private:
 	LogSyncThread* sync_thread;
 	LogAllocateThread* alloc_thread;
 	LogStorageManagerPrivate* manager;
+	int32_t need_sync;
 
 	static log4cxx::LoggerPtr logger;
 };
