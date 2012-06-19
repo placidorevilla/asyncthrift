@@ -1,5 +1,7 @@
 #include "AsyncThriftForwarder.h"
 
+#include "ForwarderManager.h"
+
 #include <cmdline.hpp>
 #include <help.hpp>
 
@@ -96,6 +98,15 @@ bool AsyncThriftForwarder::reloadConfig()
 	log4cxx::xml::DOMConfigurator::configure(qPrintable(config_dir.absoluteFilePath(LOG4CXX_CONFIG_FILE)));
 
 	QSettings settings(config_dir.absoluteFilePath(ASYNCTHRIFT_CONFIG_FILE), QSettings::IniFormat);
+
+	// TODO: Check reconfiguration
+	settings.beginGroup("LogForwarder");
+	int nentries = settings.beginReadArray("Forwarders");
+	for (int i = 0; i < nentries; i++) {
+		settings.setArrayIndex(i);
+		forwarders.append(new ForwarderManager(settings.value("Name").toString(), settings.value("ZQuorum").toString()));
+	}
+	settings.endArray();
 
 	return true;
 }

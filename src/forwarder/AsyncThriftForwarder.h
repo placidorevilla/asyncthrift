@@ -7,6 +7,8 @@
 
 #include <QDir>
 
+class ForwarderManager;
+
 class AsyncThriftForwarder : public TApplication
 {
 	Q_OBJECT
@@ -28,6 +30,7 @@ protected:
 
 private:
 	QDir config_dir;
+	QList<ForwarderManager*> forwarders;
 
 	static log4cxx::LoggerPtr logger;
 };

@@ -203,6 +203,12 @@ bool TMemFile::sync()
 	return true;
 }
 
+uchar* TMemFile::buffer()
+{
+	Q_D(TMemFile);
+	return d->buf;
+}
+
 #if 0
 int main()
 {

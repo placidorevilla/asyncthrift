@@ -29,6 +29,7 @@ public:
 	QByteArray peek(qint64 maxSize);
 
 	bool sync();
+	uchar* buffer();
 
 protected:
 	qint64 readData(char *data, qint64 maxlen);

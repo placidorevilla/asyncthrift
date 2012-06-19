@@ -29,6 +29,7 @@ log4cxx::LoggerPtr LogReadThread::logger(log4cxx::Logger::getLogger(LogReadThrea
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
 static const char* LOGGER_SOCKET_NAME = "logger";
+static const int MAX_CLIENT_BUFFER = 16 * 1024;
 
 LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this))
 {
@@ -129,10 +130,8 @@ void LogStorageManagerPrivate::finished_logger_connection()
 {
 	LogReadThread* read_thread(qobject_cast<LogReadThread*>(sender()));
 
-	int item = read_threads.indexOf(read_thread);
-	
-	delete read_threads.at(item);
-	read_threads.remove(item);
+	delete read_thread;
+	read_threads.remove(read_threads.indexOf(read_thread));
 
 	LOG4CXX_DEBUG(logger, "Finished read thread");
 }
@@ -177,8 +176,13 @@ uint64_t LogStorageManagerPrivate::transaction(uint64_t new_transaction)
 
 LogReadContext* LogStorageManagerPrivate::begin_read(uint64_t transaction)
 {
-	LogReadContext* context = new LogReadContext(this);
-	return context;
+	QList<StorageReadContext*> storage_contexts;
+
+	// TODO: check that the storage_contexts are not null, i.e. the transaction does not exist in the available logs
+	foreach (LogStorage* storage, storages)
+		storage_contexts.append(storage->begin_read(transaction));
+
+	return new LogReadContext(this, storage_contexts);
 }
 
 void LogStorageManagerPrivate::end_read(LogReadContext* context)
@@ -191,8 +195,80 @@ bool LogStorageManagerPrivate::read_next_transaction(LogReadContext* context, ch
 	return context->read_next_transaction(buffer, size);
 }
 
+LogReadContext::LogReadContext(LogStorageManagerPrivate* manager, const QList<StorageReadContext*>& storage_contexts) : manager(manager), storage_contexts(storage_contexts)
+{
+}
+
+LogReadContext::~LogReadContext()
+{
+	foreach (StorageReadContext* context, storage_contexts)
+		delete context;
+}
+
 bool LogReadContext::read_next_transaction(char** buffer, size_t* size)
 {
+	uint64_t transaction = UINT64_MAX;
+	StorageReadContext* context_to_advance = 0;
+	bool any_valid = false;
+	
+	foreach (StorageReadContext* context, storage_contexts) {
+		if (!context->peek_next_transaction(buffer, size))
+			continue;
+		if (**(uint64_t**)buffer < transaction) {
+			transaction = LOG_ENDIAN(**(uint64_t**)buffer);
+			context_to_advance = context;
+			any_valid = true;
+		}
+	}
+
+	if (context_to_advance)
+		context_to_advance->advance();
+	return any_valid;
+}
+
+StorageReadContext::StorageReadContext(LogStorage* storage, int index, TMemFile* file) : storage(storage), index(index), file(file)
+{
+}
+
+StorageReadContext::~StorageReadContext()
+{
+	delete file;
+}
+
+bool StorageReadContext::peek_next_transaction(char** buffer, size_t* size)
+{
+	if (!file)
+		return false;
+	char* buf = (char*)file->buffer();
+	if (!buf)
+		return false;
+	if (*(uint64_t *)(buf + file->pos()) == 0)
+		return false;
+	*buffer = buf + file->pos();
+	*size = (LOG_ENDIAN(*((*(uint64_t**)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
+	return true;
+}
+
+bool StorageReadContext::advance(uint64_t transaction)
+{
+	char* buffer;
+	uint64_t current_transaction;
+	size_t size;
+
+	do {
+		buffer = (char*)file->buffer() + file->pos();
+		size = (LOG_ENDIAN(*(((uint64_t*)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
+		file->seek(file->pos() + size);
+		if (((size_t)(file->size() - file->pos()) < (3 * sizeof(uint64_t))) || ((current_transaction = LOG_ENDIAN(*(uint64_t*)buffer)) == 0)) {
+			delete file;
+			file = storage->advance_next_file(&index);
+			if (file)
+				return true;
+			// TODO: next file
+			return false;
+		}
+	} while (transaction == 0 || transaction > current_transaction);
+	
 	return true;
 }
 
@@ -211,6 +287,58 @@ LogStorage::~LogStorage()
 	delete sync_thread;
 
 	current_log.close();
+}
+
+StorageReadContext* LogStorage::begin_read(uint64_t transaction)
+{
+	QMutexLocker locker(&file_guard);
+	TMemFile* file = 0;
+	int index = -1;
+
+	// TODO: check if the current writing file is the one we need
+	QList<int> known_files = file_to_transaction_map.keys();
+	for (auto log_index = known_files.end();;) {
+		if (log_index == known_files.begin())
+			break;
+		log_index--;
+		if (file_to_transaction_map[*log_index].first == 0)
+			map_log_file(*log_index);
+		if (file_to_transaction_map.contains(*log_index) && file_to_transaction_map[*log_index].first <= transaction) {
+			file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(*log_index, 4, 10, QChar('0'))));
+			file->open(QIODevice::ReadWrite);
+			index = *log_index;
+			break;
+		}
+	}
+
+	if (file == 0) {
+		// TODO: open the oldest file containing any transactions
+	}
+
+	StorageReadContext* context = new StorageReadContext(this, index, file);
+	context->advance(transaction);
+	return context;
+}
+
+TMemFile* LogStorage::advance_next_file(int* index)
+{
+	TMemFile* file = 0;
+
+	if (*index == -1)
+		return 0;
+
+	auto log_index = file_to_transaction_map.find(*index) + 1;
+
+	if (log_index == file_to_transaction_map.end()) {
+		// TODO: open the current writing file
+		*index = -1;
+		return 0;
+	}
+
+	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(log_index.key(), 4, 10, QChar('0'))));
+	file->open(QIODevice::ReadWrite);
+	*index = log_index.key();
+	return file;
 }
 
 void LogStorage::map_log_file(int log_index)
@@ -430,7 +558,7 @@ void LogWriteThread::quit()
 	quitNow = true;
 }
 
-LogReadThread::LogReadThread(QLocalSocket* socket, LogStorageManagerPrivate* manager) : socket(socket), manager(manager), stream(socket)
+LogReadThread::LogReadThread(QLocalSocket* socket, LogStorageManagerPrivate* manager) : socket(socket), manager(manager), stream(socket), transaction(0)
 {
 	moveToThread(this);
 	socket->setParent(0);
@@ -443,10 +571,25 @@ void LogReadThread::run()
 	LOG4CXX_DEBUG(logger, "Start read thread");
 	connect(socket, SIGNAL(disconnected()), SLOT(quit()));
 	connect(socket, SIGNAL(readyRead()), SLOT(handle_ready_read()));
+	connect(socket, SIGNAL(bytesWritten(qint64)), SLOT(handle_bytes_written(qint64)));
 
 	exec();
 
 	socket->close();
+
+	if (read_context)
+		manager->end_read(read_context);
+}
+
+void LogReadThread::write_transactions()
+{
+	char* buffer;
+	size_t size;
+
+	while (stream.device()->bytesToWrite() < MAX_CLIENT_BUFFER && manager->read_next_transaction(read_context, &buffer, &size)) {
+		LOG4CXX_DEBUG(logger, "Writing to forwarder");
+		stream.writeBytes(buffer, size);
+	}
 }
 
 void LogReadThread::handle_ready_read()
@@ -461,10 +604,16 @@ void LogReadThread::handle_ready_read()
 
 	LOG4CXX_DEBUG(logger, qPrintable(QString("Pending transaction %1").arg(tx)));
 
-	if (transaction == 0)
+	if (transaction == 0) {
 		transaction = tx;
+		read_context = manager->begin_read(transaction);
+		write_transactions();
+	}
+}
 
-	// TODO: begin sending pending transactions until current
-	// TODO: begin iterating on bytesWritten waiting for bytesToWrite to be below a certain value to not overload the write buffer
+void LogReadThread::handle_bytes_written(qint64 bytes)
+{
+	Q_UNUSED(bytes);
+	write_transactions();
 }
 

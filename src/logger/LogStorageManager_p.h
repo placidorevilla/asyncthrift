@@ -15,6 +15,8 @@
 class LogStorageManagerPrivate;
 class LogStorage;
 class NBRingByteBuffer;
+class LogReadContext;
+class StorageReadContext;
 
 class LogWriteThread : public QThread {
 	Q_OBJECT
@@ -82,26 +84,47 @@ public:
 protected:
 	virtual void run();
 
+private:
+	void write_transactions();
+
 private slots:
 	void handle_ready_read();
+	void handle_bytes_written(qint64 bytes);
 
 private:
 	QLocalSocket* socket;
 	LogStorageManagerPrivate* manager;
 	QDataStream stream;
 	uint64_t transaction;
+	LogReadContext *read_context;
 
 	static log4cxx::LoggerPtr logger;
 };
 
 class LogReadContext {
 public:
-	explicit LogReadContext(LogStorageManagerPrivate* manager) : manager(manager) {}
+	LogReadContext(LogStorageManagerPrivate* manager, const QList<StorageReadContext*>& storage_contexts);
+	~LogReadContext();
 
 	bool read_next_transaction(char** buffer, size_t* size);
 
 private:
 	LogStorageManagerPrivate* manager;
+	QList<StorageReadContext*> storage_contexts;
+};
+
+class StorageReadContext {
+public:
+	StorageReadContext(LogStorage* storage, int index, TMemFile* file);
+	~StorageReadContext();
+
+	bool peek_next_transaction(char** buffer, size_t* size);
+	bool advance(uint64_t transaction = 0);
+
+private:
+	LogStorage* storage;
+	int index;
+	TMemFile* file;
 };
 
 class LogStorage : public QObject {
@@ -116,6 +139,9 @@ public:
 	~LogStorage();
 
 	QString path() const { return storage_dir.path(); }
+
+	StorageReadContext* begin_read(uint64_t transaction);
+	TMemFile* advance_next_file(int* index);
 
 private:
 	void map_log_file(int log_index);

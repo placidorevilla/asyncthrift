@@ -8,3 +8,8 @@ SyncPeriod=1000
 MaxLogSize=67108864
 Paths\\1\\Dir=$${LOCALSTATEDIR}/lib/$${PACKAGE}
 Paths\\size=1
+
+[LogForwarder]
+Forwarders\\1\\Name=live
+Forwarders\\1\\ZQuorum=localhost
+Forwarders\\size=1

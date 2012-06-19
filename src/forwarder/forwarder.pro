@@ -37,12 +37,15 @@ LIBS += -L$$TOP_BUILDDIR/src/common/ -lcommon
 
 HEADERS += \
 	AsyncThriftForwarder.h \
+	ForwarderManager.h \
+	ForwarderManager_p.h \
 	JniHelper.h \
 	JavaObject.h \
 	HBaseClient.h
 
 SOURCES += \
 	AsyncThriftForwarder.cpp \
+	ForwarderManager.cpp \
 	JniHelper.c \
 	JavaObject.cpp \
 	HBaseClient.cpp
