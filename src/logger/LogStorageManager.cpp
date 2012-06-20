@@ -16,6 +16,7 @@
 #include <lzma.h>
 
 #include <fcntl.h>
+#include <time.h>
 
 #include "config.h"
 
@@ -26,6 +27,7 @@ log4cxx::LoggerPtr LogWriteThread::logger(log4cxx::Logger::getLogger(LogWriteThr
 log4cxx::LoggerPtr LogSyncThread::logger(log4cxx::Logger::getLogger(LogSyncThread::staticMetaObject.className()));
 log4cxx::LoggerPtr LogAllocateThread::logger(log4cxx::Logger::getLogger(LogAllocateThread::staticMetaObject.className()));
 log4cxx::LoggerPtr LogReadThread::logger(log4cxx::Logger::getLogger(LogReadThread::staticMetaObject.className()));
+log4cxx::LoggerPtr StorageReadContext::logger(log4cxx::Logger::getLogger(LogReadThread::staticMetaObject.className()));
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
 static const char* LOGGER_SOCKET_NAME = "logger";
@@ -178,7 +180,6 @@ LogReadContext* LogStorageManagerPrivate::begin_read(uint64_t transaction)
 {
 	QList<StorageReadContext*> storage_contexts;
 
-	// TODO: check that the storage_contexts are not null, i.e. the transaction does not exist in the available logs
 	foreach (LogStorage* storage, storages)
 		storage_contexts.append(storage->begin_read(transaction));
 
@@ -212,14 +213,20 @@ bool LogReadContext::read_next_transaction(char** buffer, size_t* size)
 	bool any_valid = false;
 	
 	foreach (StorageReadContext* context, storage_contexts) {
-		if (!context->peek_next_transaction(buffer, size))
-			continue;
+		if (!context->peek_next_transaction(buffer, size)) {
+			// TODO: check if we are blocked waiting for events
+			context->advance();
+			if (!context->peek_next_transaction(buffer, size))
+				continue;
+		}
 		if (**(uint64_t**)buffer < transaction) {
 			transaction = LOG_ENDIAN(**(uint64_t**)buffer);
 			context_to_advance = context;
 			any_valid = true;
 		}
 	}
+
+//	printf("tx: %lu, any: %d\n", transaction, any_valid);
 
 	if (context_to_advance)
 		context_to_advance->advance();
@@ -237,12 +244,11 @@ StorageReadContext::~StorageReadContext()
 
 bool StorageReadContext::peek_next_transaction(char** buffer, size_t* size)
 {
+	// TODO: this can't happen
 	if (!file)
 		return false;
 	char* buf = (char*)file->buffer();
-	if (!buf)
-		return false;
-	if (*(uint64_t *)(buf + file->pos()) == 0)
+	if (LOG_ENDIAN(*(uint64_t *)(buf + file->pos())) == 0)
 		return false;
 	*buffer = buf + file->pos();
 	*size = (LOG_ENDIAN(*((*(uint64_t**)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
@@ -255,19 +261,24 @@ bool StorageReadContext::advance(uint64_t transaction)
 	uint64_t current_transaction;
 	size_t size;
 
+	// TODO: this can't happen
+	if (!file)
+		return false;
+
 	do {
 		buffer = (char*)file->buffer() + file->pos();
-		size = (LOG_ENDIAN(*(((uint64_t*)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
-		file->seek(file->pos() + size);
 		if (((size_t)(file->size() - file->pos()) < (3 * sizeof(uint64_t))) || ((current_transaction = LOG_ENDIAN(*(uint64_t*)buffer)) == 0)) {
 			delete file;
 			file = storage->advance_next_file(&index);
 			if (file)
 				return true;
-			// TODO: next file
 			return false;
 		}
-	} while (transaction == 0 || transaction > current_transaction);
+		if (transaction == 0 || transaction > current_transaction) {
+			size = (LOG_ENDIAN(*(((uint64_t*)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
+			file->seek(file->pos() + size);
+		}
+	} while (transaction != 0 && transaction > current_transaction);
 	
 	return true;
 }
@@ -296,7 +307,10 @@ StorageReadContext* LogStorage::begin_read(uint64_t transaction)
 	int index = -1;
 
 	// TODO: check if the current writing file is the one we need
+	
 	QList<int> known_files = file_to_transaction_map.keys();
+	if (known_files.size() > 0)
+		index = *known_files.begin();
 	for (auto log_index = known_files.end();;) {
 		if (log_index == known_files.begin())
 			break;
@@ -304,16 +318,19 @@ StorageReadContext* LogStorage::begin_read(uint64_t transaction)
 		if (file_to_transaction_map[*log_index].first == 0)
 			map_log_file(*log_index);
 		if (file_to_transaction_map.contains(*log_index) && file_to_transaction_map[*log_index].first <= transaction) {
-			file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(*log_index, 4, 10, QChar('0'))));
-			file->open(QIODevice::ReadWrite);
 			index = *log_index;
 			break;
 		}
 	}
 
-	if (file == 0) {
-		// TODO: open the oldest file containing any transactions
+	// TODO: this can't happen
+	if (index == -1) {
+		LOG4CXX_DEBUG(logger, "should have opened the current file");
+		return 0;
 	}
+
+	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(index, 4, 10, QChar('0'))));
+	file->open(QIODevice::ReadWrite);
 
 	StorageReadContext* context = new StorageReadContext(this, index, file);
 	context->advance(transaction);
@@ -324,12 +341,16 @@ TMemFile* LogStorage::advance_next_file(int* index)
 {
 	TMemFile* file = 0;
 
+	LOG4CXX_DEBUG(logger, "advance_next_file");
+
+	// TODO: this can't happen
 	if (*index == -1)
 		return 0;
 
 	auto log_index = file_to_transaction_map.find(*index) + 1;
 
 	if (log_index == file_to_transaction_map.end()) {
+		LOG4CXX_DEBUG(logger, "We need to open the current file");
 		// TODO: open the current writing file
 		*index = -1;
 		return 0;
@@ -457,7 +478,10 @@ void LogStorage::write(void* buffer, size_t size)
 	size_t rounded_size;
 	uint64_t transaction, crc, timestamp_and_len;
 
-	time_t now = time(NULL);
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	// This is the current time in tenths of a second
+	uint32_t now = (uint32_t) (ts.tv_sec * 10 + ts.tv_nsec / 100000000);
 
 	rounded_size = ((size + sizeof(uint64_t) - 1) / sizeof(uint64_t)) * sizeof(uint64_t);
 
@@ -466,7 +490,7 @@ void LogStorage::write(void* buffer, size_t size)
 
 	transaction = LOG_ENDIAN(manager->transaction());
 //	printf("tx: %lu\n", LOG_ENDIAN(transaction));
-	timestamp_and_len = LOG_ENDIAN(((uint32_t) now) | (rounded_size << (sizeof(uint32_t) * 8)));
+	timestamp_and_len = LOG_ENDIAN(now | (rounded_size << (sizeof(uint32_t) * 8)));
 //	printf("ts: %x, size: %x, val: %lx\n", (uint32_t) now, (uint32_t) rounded_size, timestamp_and_len);
 	crc = LOG_ENDIAN(lzma_crc64(reinterpret_cast<uint8_t*>(buffer), size, 0));
 	current_log.write((const char*)&transaction, sizeof(transaction));

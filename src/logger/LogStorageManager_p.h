@@ -125,6 +125,8 @@ private:
 	LogStorage* storage;
 	int index;
 	TMemFile* file;
+
+	static log4cxx::LoggerPtr logger;
 };
 
 class LogStorage : public QObject {
