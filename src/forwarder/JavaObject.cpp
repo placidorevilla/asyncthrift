@@ -15,18 +15,18 @@ JavaObject::~JavaObject()
 		getJNIEnv()->DeleteGlobalRef(object);
 }
 
-void JavaObject::setJObjectLocal(jobject object)
+void JavaObject::setJObjectLocal(jobject object_)
 {
-	setJObject(object);
-	getJNIEnv()->DeleteLocalRef(object);
+	setJObject(object_);
+	getJNIEnv()->DeleteLocalRef(object_);
 }
 
-void JavaObject::setJObject(jobject object)
+void JavaObject::setJObject(jobject object_)
 {
 	// TODO: check class_name of jobject
 	if (object)
 		getJNIEnv()->DeleteGlobalRef(object);
-	object = getJNIEnv()->NewGlobalRef(object);
+	object = getJNIEnv()->NewGlobalRef(object_);
 }
 
 jvalue JavaObject::invokeInstanceMethod(const char* name, const char* signature, ...) const
