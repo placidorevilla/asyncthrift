@@ -35,6 +35,8 @@ QMAKE_CLEAN += ${TARGET}
 
 LIBS += -L$$TOP_BUILDDIR/src/common/ -lcommon
 
+PKGCONFIG += thrift
+
 HEADERS += \
 	AsyncThriftForwarder.h \
 	ForwarderManager.h \

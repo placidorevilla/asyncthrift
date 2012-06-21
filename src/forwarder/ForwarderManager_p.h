@@ -13,9 +13,11 @@
 #include <QDataStream>
 #include <QFile>
 #include <QFutureWatcher>
+#include <QSet>
 #include <QCircularBuffer>
 
 class BatchRequests;
+class PendingRequest;
 
 class ForwarderManagerPrivate : public QThread {
 	Q_OBJECT
@@ -57,6 +59,8 @@ private:
 	QCircularBuffer<uint64_t> flying_txs;
 	BatchRequests* delayed_batch;
 
+	AsyncHBase::HBaseClient* hbase_client;
+
 	ForwarderManager* q_ptr;
 
 	static log4cxx::LoggerPtr logger;
@@ -75,7 +79,7 @@ public:
 	uint64_t transaction() const { return LOG_ENDIAN(*(uint64_t*) buffer_.data()); }
 	uint32_t timestamp() const { return LOG_ENDIAN(*(((uint64_t*) buffer_.data()) + 1)); }
 
-	bool parse();
+	bool send(AsyncHBase::HBaseClient* client);
 
 signals:
 	void finished();
@@ -85,6 +89,7 @@ private slots:
 
 private:
 	QVector<char> buffer_;
+	QSet<PendingRequest*> pending_requests;
 };
 
 class PendingRequest : public QFutureWatcher<void>

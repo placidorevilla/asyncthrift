@@ -1,10 +1,14 @@
 #include "ForwarderManager.h"
 #include "ForwarderManager_p.h"
 
+#include "HBaseOperations.h"
+
 #include "config.h"
 
 #include <QDir>
 #include <QTimer>
+
+using namespace AsyncHBase;
 
 log4cxx::LoggerPtr ForwarderManager::logger(log4cxx::Logger::getLogger(ForwarderManager::staticMetaObject.className()));
 log4cxx::LoggerPtr ForwarderManagerPrivate::logger(log4cxx::Logger::getLogger(ForwarderManager::staticMetaObject.className()));
@@ -15,10 +19,11 @@ static int MAX_FLYING_TX = 1000;
 static uint64_t TX_DONE_MASK = 1ULL << 63;
 static uint64_t TX_FLYING_MASK = ~(1ULL << 63);
 
-ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, ForwarderManager* parent) : QThread(), name(name), zquorum(zquorum), delay(delay), stream(&socket), state(STATE_READ_LEN), len(0), flying_txs(MAX_FLYING_TX), q_ptr(parent)
+ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, ForwarderManager* parent) : QThread(), name(name), zquorum(zquorum), delay(delay), stream(&socket), state(STATE_READ_LEN), len(0), flying_txs(MAX_FLYING_TX), hbase_client(new HBaseClient(zquorum.toAscii(), "/hbase")), q_ptr(parent)
 {
 	QDir state_dir(PKGSTATEDIR);
 
+	// TODO: configure the HBaseClient object
 	moveToThread(this);
 	socket.moveToThread(this);
 	tx_ptr_file.setFileName(state_dir.absoluteFilePath(QString("forwarder_%1.ptr").arg(name)));
@@ -125,7 +130,7 @@ void ForwarderManagerPrivate::handle_ready_read()
 		}
 
 		if (state == STATE_FORWARDING) {
-			if (!batch->parse())
+			if (!batch->send(hbase_client))
 				delete batch;
 
 			state = STATE_READ_LEN;
@@ -181,14 +186,51 @@ ForwarderManager::~ForwarderManager()
 {
 }
 
-bool BatchRequests::parse()
+bool BatchRequests::send(HBaseClient* client)
 {
-	QTimer::singleShot(qrand() % 1000, this, SLOT(handle_finished()));
+	DeserializableHBaseOperation::MutateRows mutate;
+
+	// TODO: check type of request
+	mutate.deserialize(buffer() + sizeof(uint64_t) * 2); // Skip transaction and timestamp
+	foreach (const DeserializableHBaseOperation::RowValues& row, mutate.rows()) {
+		foreach (const DeserializableHBaseOperation::FamilyValues& family, row.second) {
+			foreach (const DeserializableHBaseOperation::QualifierValue& qv, family.second) {
+				PutRequest* pr = new PutRequest(mutate.table(), row.first, family.first, qv.qualifier(), qv.value(), qv.timestamp());
+				pr->set_bufferable(true);
+				pr->set_durable(true);
+				PendingRequest* pending = new PendingRequest(pr);
+				connect(pending, SIGNAL(finished()), this, SLOT(handle_finished()));
+
+				try {
+					pending->setFuture(client->put(*pr));
+				} catch (JavaException& e) {
+					printf("%s: %s\n", e.name(), e.what());
+					throw;
+				}
+
+				pending_requests.insert(pending);
+			}
+		}
+	}
 	return true;
 }
 
 void BatchRequests::handle_finished()
 {
-	emit finished();
+	PendingRequest* pending = qobject_cast<PendingRequest*>(sender());
+
+	try {
+		pending->waitForFinished();
+	} catch (HBaseException& e) {
+		printf("E: [%s] %s\n", qPrintable(e.name()), qPrintable(e.message()));
+	}
+
+	delete pending->request();
+	delete pending;
+
+	pending_requests.remove(pending);
+
+	if (pending_requests.isEmpty())
+		emit finished();
 }
 
