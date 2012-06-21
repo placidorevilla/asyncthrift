@@ -1,4 +1,4 @@
-CONFIG += debug warn_on link_pkgconfig nostrip
+CONFIG += debug warn_on link_pkgconfig nostrip link_prl
 #CONFIG += silent
 QT -= gui
 QT += network
@@ -24,8 +24,8 @@ JAVAC = $$JAVA_HOME/bin/javac
 
 PKGCONFIG += libdaemon liblog4cxx
 
-DEPENDPATH += $$TOP_BUILDDIR $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/include/QCircularBuffer $$TOP_SRCDIR/src/common
-INCLUDEPATH += $$TOP_BUILDDIR $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/include/QCircularBuffer $$TOP_SRCDIR/src/common
+DEPENDPATH += $$TOP_BUILDDIR $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/include/QCircularBuffer $$TOP_SRCDIR/src/common $$TOP_SRCDIR/src/common/gen-cpp
+INCLUDEPATH += $$TOP_BUILDDIR $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/include/QCircularBuffer $$TOP_SRCDIR/src/common $$TOP_SRCDIR/src/common/gen-cpp
 
 ALL_BUILD_SUBSTITUTES = $$BUILD_SUBSTITUTES $$BUILD_SUBSTITUTES_NOINSTALL
 QMAKE_SUBSTITUTES += $$ALL_BUILD_SUBSTITUTES

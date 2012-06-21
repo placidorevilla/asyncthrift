@@ -1,11 +1,13 @@
 #ifndef HBASE_OPERATIONS_H
 #define HBASE_OPERATIONS_H
 
-#include "HBaseHandler.h"
+#include "Hbase.h"
 
 #include <QByteArray>
 #include <QPair>
 #include <QVector>
+
+using namespace apache::hadoop::hbase::thrift;
 
 class HBaseOperation {
 public:
