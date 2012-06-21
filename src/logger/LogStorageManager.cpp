@@ -582,7 +582,7 @@ void LogWriteThread::quit()
 	quitNow = true;
 }
 
-LogReadThread::LogReadThread(QLocalSocket* socket, LogStorageManagerPrivate* manager) : socket(socket), manager(manager), stream(socket), transaction(0)
+LogReadThread::LogReadThread(QLocalSocket* socket, LogStorageManagerPrivate* manager) : socket(socket), manager(manager), stream(socket), transaction(0), read_context(0)
 {
 	moveToThread(this);
 	socket->setParent(0);

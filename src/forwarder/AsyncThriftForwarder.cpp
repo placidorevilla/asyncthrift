@@ -104,7 +104,7 @@ bool AsyncThriftForwarder::reloadConfig()
 	int nentries = settings.beginReadArray("Forwarders");
 	for (int i = 0; i < nentries; i++) {
 		settings.setArrayIndex(i);
-		forwarders.append(new ForwarderManager(settings.value("Name").toString(), settings.value("ZQuorum").toString()));
+		forwarders.append(new ForwarderManager(settings.value("Name").toString(), settings.value("ZQuorum").toString(), settings.value("Delay").toUInt()));
 	}
 	settings.endArray();
 

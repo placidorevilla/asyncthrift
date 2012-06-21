@@ -12,7 +12,7 @@ class ForwarderManager : public QObject {
 	Q_DISABLE_COPY(ForwarderManager)
 
 public:
-	ForwarderManager(const QString& name, const QString& zquorum, QObject* parent = 0);
+	ForwarderManager(const QString& name, const QString& zquorum, unsigned int delay, QObject* parent = 0);
 	~ForwarderManager();
 
 private:
