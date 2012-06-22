@@ -146,7 +146,7 @@ public:
 	TMemFile* advance_next_file(int* index);
 
 private:
-	void map_log_file(int log_index);
+	void map_log_file(int log_index, bool only_start = false);
 	void get_next_file();
 	void write(void* buffer, size_t size);
 

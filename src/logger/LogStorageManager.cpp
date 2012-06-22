@@ -318,7 +318,7 @@ StorageReadContext* LogStorage::begin_read(uint64_t transaction)
 			break;
 		log_index--;
 		if (file_to_transaction_map[*log_index].first == 0)
-			map_log_file(*log_index);
+			map_log_file(*log_index, true);
 		if (file_to_transaction_map.contains(*log_index) && file_to_transaction_map[*log_index].first <= transaction) {
 			index = *log_index;
 			break;
@@ -364,7 +364,7 @@ TMemFile* LogStorage::advance_next_file(int* index)
 	return file;
 }
 
-void LogStorage::map_log_file(int log_index)
+void LogStorage::map_log_file(int log_index, bool only_start)
 {
 	if (invalid_files_map.contains(log_index))
 		return;
@@ -378,7 +378,7 @@ void LogStorage::map_log_file(int log_index)
 	} else {
 		first_good_transaction = transaction = LOG_ENDIAN(transaction);
 		LOG4CXX_INFO(logger, qPrintable(QString("First good transaction for file '%1' is %2").arg(log_file.file()->fileName()).arg(first_good_transaction)));
-		while(transaction != 0) {
+		while(!only_start && transaction != 0) {
 			last_good_transaction = transaction;
 			if (log_file.read((char*)&timestamp_and_len, sizeof(timestamp_and_len)) != sizeof(timestamp_and_len))
 				break;
