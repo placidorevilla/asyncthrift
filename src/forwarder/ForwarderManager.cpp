@@ -12,12 +12,16 @@ using namespace AsyncHBase;
 
 log4cxx::LoggerPtr ForwarderManager::logger(log4cxx::Logger::getLogger(ForwarderManager::staticMetaObject.className()));
 log4cxx::LoggerPtr ForwarderManagerPrivate::logger(log4cxx::Logger::getLogger(ForwarderManager::staticMetaObject.className()));
+log4cxx::LoggerPtr BatchRequests::logger(log4cxx::Logger::getLogger(BatchRequests::staticMetaObject.className()));
 
-static const char* LOGGER_SOCKET_NAME = "logger";
-static int RECONNECT_TIME = 1000;
-static int MAX_FLYING_TX = 1000;
 static uint64_t TX_DONE_MASK = 1ULL << 63;
 static uint64_t TX_FLYING_MASK = ~(1ULL << 63);
+
+// TODO: this should be config
+static const char* LOGGER_SOCKET_NAME = "logger";
+static int RECONNECT_TIME = 1000;
+static int MAX_FLYING_TX = 4096;
+static quint64 MAX_SOCKET_BUFFER_SIZE = 4 * 1024 * 1024;
 
 ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, ForwarderManager* parent) : QThread(), name(name), zquorum(zquorum), delay(delay), stream(&socket), state(STATE_READ_LEN), len(0), flying_txs(MAX_FLYING_TX), hbase_client(new HBaseClient(zquorum.toAscii(), "/hbase")), q_ptr(parent)
 {
@@ -26,6 +30,7 @@ ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QStr
 	// TODO: configure the HBaseClient object
 	moveToThread(this);
 	socket.moveToThread(this);
+	socket.setReadBufferSize(MAX_SOCKET_BUFFER_SIZE);
 	tx_ptr_file.setFileName(state_dir.absoluteFilePath(QString("forwarder_%1.ptr").arg(name)));
 	tx_ptr_file.open(QIODevice::ReadWrite);
 	tx_ptr_stream.setDevice(&tx_ptr_file);
@@ -202,13 +207,14 @@ bool BatchRequests::send(HBaseClient* client)
 				connect(pending, SIGNAL(finished()), this, SLOT(handle_finished()));
 
 				try {
+//					LOG4CXX_DEBUG(logger, "send " << (uint64_t)pending);
 					pending->setFuture(client->put(*pr));
+					pending_requests.insert(pending);
 				} catch (JavaException& e) {
-					printf("%s: %s\n", e.name(), e.what());
-					throw;
+					LOG4CXX_WARN(logger, "EXCEPTION: [" << e.name() << "] " << e.what());
+					delete pr;
+					delete pending;
 				}
-
-				pending_requests.insert(pending);
 			}
 		}
 	}
@@ -220,9 +226,11 @@ void BatchRequests::handle_finished()
 	PendingRequest* pending = qobject_cast<PendingRequest*>(sender());
 
 	try {
+//		LOG4CXX_DEBUG(logger, "finished " << (uint64_t)pending);
 		pending->waitForFinished();
+	// TODO: check the different kinds of exceptions
 	} catch (HBaseException& e) {
-		printf("E: [%s] %s\n", qPrintable(e.name()), qPrintable(e.message()));
+		LOG4CXX_WARN(logger, "EXCEPTION: [" << qPrintable(e.name()) << "] " << qPrintable(e.message()));
 	}
 
 	delete pending->request();

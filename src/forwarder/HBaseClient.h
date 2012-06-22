@@ -30,6 +30,7 @@ public:
 	DECLARE_HAS_PROPERTY(long, Timestamp, timestamp);
 
 	HBaseRpc(const QByteArray& table, const QByteArray& key) : table_(table), key_(key) {}
+	virtual ~HBaseRpc() {}
 
 	QByteArray table() const { return table_; }
 	QByteArray key() const { return key_; }
@@ -44,6 +45,7 @@ public:
 	BatchableRpc(const QByteArray& table, const QByteArray& key, const QByteArray& family, long timestamp, bool bufferable = true, bool durable = true) :
 		HBaseRpc(table, key), HBaseRpc::HasFamily(family), HBaseRpc::HasTimestamp(timestamp), bufferable_(bufferable), durable_(durable)
 	{}
+	virtual ~BatchableRpc() {}
 
 	void set_bufferable(bool bufferable) { bufferable_ = bufferable; }
 	void set_durable(bool durable) { durable_ = durable; }
@@ -60,6 +62,7 @@ public:
 	PutRequest(const QByteArray& table, const QByteArray& key, const QByteArray& family, const QByteArray& qualifier, const QByteArray& value, long timestamp = KeyValue::TIMESTAMP_NOW) :
 		JavaObject(), BatchableRpc(table, key, family, timestamp), HBaseRpc::HasQualifier(qualifier), HBaseRpc::HasValue(value)
 	{}
+	virtual ~PutRequest() {}
 
 	jobject getJObject() const;
 };

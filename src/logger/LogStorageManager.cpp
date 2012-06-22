@@ -30,8 +30,10 @@ log4cxx::LoggerPtr LogReadThread::logger(log4cxx::Logger::getLogger(LogReadThrea
 log4cxx::LoggerPtr StorageReadContext::logger(log4cxx::Logger::getLogger(LogReadThread::staticMetaObject.className()));
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
+// TODO: this should be config
 static const char* LOGGER_SOCKET_NAME = "logger";
-static const int MAX_CLIENT_BUFFER = 16 * 1024;
+static const int MAX_CLIENT_BUFFER = 1 * 1024 * 1024;
+static const int MAX_TRANSACTIONS_SENT_PER_LOOP = 32;
 
 LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this))
 {
@@ -609,9 +611,9 @@ void LogReadThread::write_transactions()
 {
 	char* buffer;
 	size_t size;
+	int max_to_write = MAX_TRANSACTIONS_SENT_PER_LOOP;
 
-	while (stream.device()->bytesToWrite() < MAX_CLIENT_BUFFER && manager->read_next_transaction(read_context, &buffer, &size)) {
-		LOG4CXX_DEBUG(logger, "Writing to forwarder");
+	while (max_to_write-- && stream.device()->bytesToWrite() < MAX_CLIENT_BUFFER && manager->read_next_transaction(read_context, &buffer, &size)) {
 		stream.writeBytes(buffer, size);
 	}
 }
@@ -623,7 +625,8 @@ void LogReadThread::handle_ready_read()
 	if ((size_t)socket->bytesAvailable() < sizeof(tx))
 		return;
 
-	stream.readRawData((char*)& tx, sizeof(tx));
+	while ((size_t)socket->bytesAvailable() >= sizeof(tx))
+		stream.readRawData((char*)& tx, sizeof(tx));
 	tx = LOG_ENDIAN(tx);
 
 	LOG4CXX_DEBUG(logger, qPrintable(QString("Pending transaction %1").arg(tx)));

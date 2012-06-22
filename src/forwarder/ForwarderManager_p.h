@@ -90,6 +90,8 @@ private slots:
 private:
 	QVector<char> buffer_;
 	QSet<PendingRequest*> pending_requests;
+
+	static log4cxx::LoggerPtr logger;
 };
 
 class PendingRequest : public QFutureWatcher<void>

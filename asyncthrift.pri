@@ -3,9 +3,9 @@ CONFIG += debug warn_on link_pkgconfig nostrip link_prl
 QT -= gui
 QT += network
 
-#release {
-#	OPTIMIZE_FLAGS = -O3 -march=native -fomit-frame-pointer -mfpmath=sse
-#}
+release {
+	OPTIMIZE_FLAGS = -O3 -march=native -fomit-frame-pointer -mfpmath=sse
+}
 
 profile {
 	PROFILE_CFLAGS = -pg

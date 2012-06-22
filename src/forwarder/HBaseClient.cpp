@@ -117,9 +117,9 @@ void Deferred::connect()
 {
 	JNIEnv* env = getJNIEnv();
 
-	jobject cb = constructNewObjectOfClass(env, NULL, generic_callback_class_name, "()V");
-	cb = env->NewGlobalRef(cb);
-	env->DeleteLocalRef(cb);
+	jobject _cb = constructNewObjectOfClass(env, NULL, generic_callback_class_name, "()V");
+	cb = env->NewGlobalRef(_cb);
+	env->DeleteLocalRef(_cb);
 	jclass cls = env->FindClass(generic_callback_class_name);
 	jfieldID fid = env->GetFieldID(cls, "native_object", "J");
 	env->SetLongField(cb, fid, (long) this);

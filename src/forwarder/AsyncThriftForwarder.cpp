@@ -15,6 +15,8 @@
 const char* LOG4CXX_CONFIG_FILE = "log4cxx.xml";
 const char* ASYNCTHRIFT_CONFIG_FILE = "asyncthrift.ini";
 
+// TODO: daemonization and stuff
+
 log4cxx::LoggerPtr AsyncThriftForwarder::logger(log4cxx::Logger::getLogger(AsyncThriftForwarder::staticMetaObject.className()));
 
 AsyncThriftForwarder::AsyncThriftForwarder(int& argc, char** argv) : TApplication(argc, argv), config_dir(QDir("/etc/asyncthrift"))

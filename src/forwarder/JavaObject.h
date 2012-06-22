@@ -20,7 +20,7 @@ class JavaObject {
 
 public:
 	JavaObject(jobject object = 0);
-	~JavaObject();
+	virtual ~JavaObject();
 
 	jobject getJObject() const { return object; }
 	JNIEnv* getJNIEnv() const { return ::getJNIEnv(); }
