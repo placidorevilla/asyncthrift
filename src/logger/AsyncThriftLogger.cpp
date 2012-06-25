@@ -27,8 +27,8 @@ AsyncThriftLogger::~AsyncThriftLogger()
 
 bool AsyncThriftLogger::init()
 {
-	log4cxx::BasicConfigurator::configure();
-	this->setApplicationName("asyncthrift");
+	TLogger::configure();
+	this->setApplicationName("asyncthrift-logger");
 
 	try {
 		QtArgCmdLine cmdline;

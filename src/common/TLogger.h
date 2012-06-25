@@ -103,10 +103,13 @@ inline void HierarchyNamer::calc_hierarchy_name(const QMetaObject* mo)
 	}
 }
 
-inline void configure(const char* filename)
+inline void configure(const char* filename = 0)
 {
 	log4cxx::BasicConfigurator::resetConfiguration();
-	log4cxx::xml::DOMConfigurator::configure(filename);
+	if (filename)
+		log4cxx::xml::DOMConfigurator::configure(filename);
+	else
+		log4cxx::BasicConfigurator::configure();
 }
 
 } // namespace TLogger
