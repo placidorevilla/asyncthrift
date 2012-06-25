@@ -1,7 +1,7 @@
 #ifndef THRIFTDISPATCHER_H
 #define THRIFTDISPATCHER_H
 
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QThread>
 
@@ -10,6 +10,8 @@ class NBRingByteBuffer;
 
 class ThriftDispatcher : public QThread {
 	Q_OBJECT
+	Q_DISABLE_COPY(ThriftDispatcher)
+	T_LOGGER_DECLARE(ThriftDispatcher);
 
 public:
 	ThriftDispatcher(QObject* parent = 0);
@@ -30,7 +32,6 @@ protected:
 
 private:
 	ThriftDispatcherPrivate* d;
-	static log4cxx::LoggerPtr logger;
 };
 
 #endif // THRIFTDISPATCHER_H

@@ -17,6 +17,7 @@ HEADERS += \
 	TApplication.h \
 	TMemFile.h \
 	LogEndian.h \
+	TLogger.h \
 	HBaseOperations.h
 
 SOURCES += \

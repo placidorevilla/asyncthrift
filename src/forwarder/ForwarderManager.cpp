@@ -10,9 +10,9 @@
 
 using namespace AsyncHBase;
 
-log4cxx::LoggerPtr ForwarderManager::logger(log4cxx::Logger::getLogger(ForwarderManager::staticMetaObject.className()));
-log4cxx::LoggerPtr ForwarderManagerPrivate::logger(log4cxx::Logger::getLogger(ForwarderManager::staticMetaObject.className()));
-log4cxx::LoggerPtr BatchRequests::logger(log4cxx::Logger::getLogger(BatchRequests::staticMetaObject.className()));
+T_QLOGGER_DEFINE_ROOT(ForwarderManager);
+T_QLOGGER_DEFINE_OTHER_ROOT(ForwarderManagerPrivate, ForwarderManager);
+T_QLOGGER_DEFINE_ROOT(BatchRequests);
 
 static uint64_t TX_DONE_MASK = 1ULL << 63;
 static uint64_t TX_FLYING_MASK = ~(1ULL << 63);
@@ -148,7 +148,7 @@ void ForwarderManagerPrivate::handle_finished()
 	BatchRequests* batch = qobject_cast<BatchRequests*>(sender());
 
 	uint64_t transaction = batch->transaction() & TX_FLYING_MASK;
-//	LOG4CXX_DEBUG(logger, "finished transaction " << transaction);
+//	TDEBUG("finished transaction %llu", transaction);
 
 	int tx_idx = flying_txs.indexOf(transaction);
 	flying_txs[tx_idx] = transaction | TX_DONE_MASK;
@@ -166,7 +166,7 @@ void ForwarderManagerPrivate::handle_finished()
 		tx_ptr_file.flush();
 		tx_ptr_stream.device()->seek(0);
 		stream.writeRawData((char *)&transaction, sizeof(transaction));
-//		LOG4CXX_DEBUG(logger, "sync transaction " << transaction);
+		TDEBUG("Sync transaction %llu", transaction);
 
 		if (state == STATE_STALLED) {
 			connect(&socket, SIGNAL(readyRead()), SLOT(handle_ready_read()));
@@ -207,11 +207,11 @@ bool BatchRequests::send(HBaseClient* client)
 				connect(pending, SIGNAL(finished()), this, SLOT(handle_finished()));
 
 				try {
-//					LOG4CXX_DEBUG(logger, "send " << (uint64_t)pending);
+//					TDEBUG("send %p", pending);
 					pending->setFuture(client->put(*pr));
 					pending_requests.insert(pending);
 				} catch (JavaException& e) {
-					LOG4CXX_WARN(logger, "EXCEPTION: [" << e.name() << "] " << e.what());
+					TWARN("EXCEPTION: [%s] %s", e.name(), e.what());
 					delete pr;
 					delete pending;
 				}
@@ -226,11 +226,11 @@ void BatchRequests::handle_finished()
 	PendingRequest* pending = qobject_cast<PendingRequest*>(sender());
 
 	try {
-//		LOG4CXX_DEBUG(logger, "finished " << (uint64_t)pending);
+//		TDEBUG("finished %p", pending);
 		pending->waitForFinished();
 	// TODO: check the different kinds of exceptions
 	} catch (HBaseException& e) {
-		LOG4CXX_WARN(logger, "EXCEPTION: [" << qPrintable(e.name()) << "] " << qPrintable(e.message()));
+		TWARN("EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
 	}
 
 	delete pending->request();

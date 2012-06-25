@@ -1,7 +1,7 @@
 #ifndef FORWARDERMANAGER_H
 #define FORWARDERMANAGER_H
 
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QObject>
 
@@ -10,6 +10,7 @@ class ForwarderManagerPrivate;
 class ForwarderManager : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(ForwarderManager)
+	T_LOGGER_DECLARE(ForwarderManager);
 
 public:
 	ForwarderManager(const QString& name, const QString& zquorum, unsigned int delay, QObject* parent = 0);
@@ -18,8 +19,6 @@ public:
 private:
 	Q_DECLARE_PRIVATE(ForwarderManager);
 	ForwarderManagerPrivate* d_ptr;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 #endif // FORWARDERMANAGER_H

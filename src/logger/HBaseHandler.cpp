@@ -6,8 +6,8 @@
 #include "NBRingByteBuffer.h"
 #include "HBaseOperations.h"
 
-log4cxx::LoggerPtr HBaseHandler::logger(log4cxx::Logger::getLogger(HBaseHandler::staticMetaObject.className()));
-log4cxx::LoggerPtr HBaseHandlerPrivate::logger(log4cxx::Logger::getLogger(HBaseHandler::staticMetaObject.className()));
+T_QLOGGER_DEFINE_ROOT(HBaseHandler);
+T_QLOGGER_DEFINE_OTHER_ROOT(HBaseHandlerPrivate, HBaseHandler);
 
 static int64_t current_timestamp()
 {
@@ -65,7 +65,7 @@ void HBaseHandler::mutateRowsTs(const Text& tableName, const std::vector<BatchMu
 	if ((size = put.size()) != 0) {
 		void* buffer = d->buffer()->alloc_write(size, &tnx);
 		if (!buffer) {
-			LOG4CXX_WARN(logger, "Invalid state for ring buffer");
+			TWARN("Invalid state for ring buffer");
 			return;
 		}
 
@@ -76,7 +76,7 @@ void HBaseHandler::mutateRowsTs(const Text& tableName, const std::vector<BatchMu
 	if ((size = del.size()) != 0) {
 		void* buffer = d->buffer()->alloc_write(size, &tnx);
 		if (!buffer) {
-			LOG4CXX_WARN(logger, "Invalid state for ring buffer");
+			TWARN("Invalid state for ring buffer");
 			return;
 		}
 

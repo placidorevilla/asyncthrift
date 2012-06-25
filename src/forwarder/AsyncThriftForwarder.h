@@ -3,7 +3,7 @@
 
 #include "TApplication.h"
 
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QDir>
 
@@ -13,6 +13,7 @@ class AsyncThriftForwarder : public TApplication
 {
 	Q_OBJECT
 	Q_DISABLE_COPY(AsyncThriftForwarder)
+	T_LOGGER_DECLARE(AsyncThriftForwarder);
 
 public:
 	AsyncThriftForwarder(int& argc, char** argv);
@@ -31,8 +32,6 @@ protected:
 private:
 	QDir config_dir;
 	QList<ForwarderManager*> forwarders;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 #endif // ASYNCTHRIFTFORWARDER_H

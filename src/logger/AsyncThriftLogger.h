@@ -2,8 +2,7 @@
 #define ASYNCTHRIFTLOGGER_H
 
 #include "TApplication.h"
-
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QDir>
 
@@ -13,6 +12,7 @@ class AsyncThriftLogger : public TApplication
 {
 	Q_OBJECT
 	Q_DISABLE_COPY(AsyncThriftLogger)
+	T_LOGGER_DECLARE(AsyncThriftLogger);
 
 public:
 	AsyncThriftLogger(int& argc, char** argv);
@@ -32,8 +32,6 @@ protected:
 private:
 	ThriftDispatcher* dispatcher_;
 	QDir config_dir;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 #endif // ASYNCTHRIFTLOGGER_H

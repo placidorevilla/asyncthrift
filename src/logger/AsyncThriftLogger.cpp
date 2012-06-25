@@ -5,9 +5,6 @@
 #include <cmdline.hpp>
 #include <help.hpp>
 
-#include <log4cxx/basicconfigurator.h>
-#include <log4cxx/xml/domconfigurator.h>
-
 #include <QSettings>
 
 #include <signal.h>
@@ -17,7 +14,7 @@
 const char* LOG4CXX_CONFIG_FILE = "log4cxx.xml";
 const char* ASYNCTHRIFT_CONFIG_FILE = "asyncthrift.ini";
 
-log4cxx::LoggerPtr AsyncThriftLogger::logger(log4cxx::Logger::getLogger(AsyncThriftLogger::staticMetaObject.className()));
+T_QLOGGER_DEFINE_ROOT(AsyncThriftLogger);
 
 AsyncThriftLogger::AsyncThriftLogger(int& argc, char** argv) : TApplication(argc, argv), dispatcher_(0), config_dir(QDir(PKGSYSCONFDIR))
 {
@@ -54,7 +51,7 @@ bool AsyncThriftLogger::init()
 			config_dir = QDir(config.value().toString());
 
 		if (!config_dir.exists()) {
-			LOG4CXX_ERROR(logger, "Invalid configuration directory: " << qPrintable(config_dir.path()));
+			TERROR("Invalid configuration directory: '%s'", qPrintable(config_dir.path()));
 			return false;
 		}
 
@@ -65,7 +62,7 @@ bool AsyncThriftLogger::init()
 	} catch (const QtArgHelpHasPrintedEx& ex) {
 		return false;
 	} catch (const QtArgBaseException& ex) {
-		LOG4CXX_ERROR(logger, ex.what());
+		TERROR("%s", ex.what());
 		return false;
 	}
 
@@ -96,20 +93,19 @@ void AsyncThriftLogger::signal_received(int signo)
 
 bool AsyncThriftLogger::reloadConfig()
 {
-	LOG4CXX_DEBUG(logger, "Load configuration...");
+	TDEBUG("Load configuration...");
 
 	if (!config_dir.exists(LOG4CXX_CONFIG_FILE)) {
-		LOG4CXX_WARN(logger, "Cannot find " << LOG4CXX_CONFIG_FILE);
+		TWARN("Cannot find '%s'", LOG4CXX_CONFIG_FILE);
 		return false;
 	}
 
 	if (!config_dir.exists(ASYNCTHRIFT_CONFIG_FILE)) {
-		LOG4CXX_WARN(logger, "Cannot find " << ASYNCTHRIFT_CONFIG_FILE);
+		TWARN("Cannot find '%s'", ASYNCTHRIFT_CONFIG_FILE);
 		return false;
 	}
 
-	log4cxx::BasicConfigurator::resetConfiguration();
-	log4cxx::xml::DOMConfigurator::configure(qPrintable(config_dir.absoluteFilePath(LOG4CXX_CONFIG_FILE)));
+	TLogger::configure(qPrintable(config_dir.absoluteFilePath(LOG4CXX_CONFIG_FILE)));
 
 	QSettings settings(config_dir.absoluteFilePath(ASYNCTHRIFT_CONFIG_FILE), QSettings::IniFormat);
 
@@ -130,6 +126,11 @@ bool AsyncThriftLogger::reloadConfig()
 	dispatcher()->configure_log_storage(settings.value("MaxLogSize", 64).toUInt(), settings.value("SyncPeriod", 1000).toUInt(), log_dirs);
 
 	return true;
+}
+
+const char* TLoggerRoot()
+{
+	return "logger";
 }
 
 int main(int argc, char **argv)

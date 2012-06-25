@@ -5,9 +5,6 @@
 #include <cmdline.hpp>
 #include <help.hpp>
 
-#include <log4cxx/basicconfigurator.h>
-#include <log4cxx/xml/domconfigurator.h>
-
 #include <QSettings>
 
 #include <signal.h>
@@ -17,7 +14,7 @@ const char* ASYNCTHRIFT_CONFIG_FILE = "asyncthrift.ini";
 
 // TODO: daemonization and stuff
 
-log4cxx::LoggerPtr AsyncThriftForwarder::logger(log4cxx::Logger::getLogger(AsyncThriftForwarder::staticMetaObject.className()));
+T_QLOGGER_DEFINE_ROOT(AsyncThriftForwarder);
 
 AsyncThriftForwarder::AsyncThriftForwarder(int& argc, char** argv) : TApplication(argc, argv), config_dir(QDir("/etc/asyncthrift"))
 {
@@ -49,13 +46,13 @@ bool AsyncThriftForwarder::init()
 			config_dir = QDir(config.value().toString());
 
 		if (!config_dir.exists()) {
-			LOG4CXX_ERROR(logger, "Invalid configuration directory: " << qPrintable(config_dir.path()));
+			TERROR("Invalid configuration directory: '%s'", qPrintable(config_dir.path()));
 			return false;
 		}
 	} catch (const QtArgHelpHasPrintedEx& ex) {
 		return false;
 	} catch (const QtArgBaseException& ex) {
-		LOG4CXX_ERROR(logger, ex.what());
+		TERROR("%s", ex.what());
 		return false;
 	}
 
@@ -84,20 +81,19 @@ void AsyncThriftForwarder::signal_received(int signo)
 
 bool AsyncThriftForwarder::reloadConfig()
 {
-	LOG4CXX_DEBUG(logger, "Load configuration...");
+	TDEBUG("Load configuration...");
 
 	if (!config_dir.exists(LOG4CXX_CONFIG_FILE)) {
-		LOG4CXX_WARN(logger, "Cannot find " << LOG4CXX_CONFIG_FILE);
+		TWARN("Cannot find '%s'", LOG4CXX_CONFIG_FILE);
 		return false;
 	}
 
 	if (!config_dir.exists(ASYNCTHRIFT_CONFIG_FILE)) {
-		LOG4CXX_WARN(logger, "Cannot find " << ASYNCTHRIFT_CONFIG_FILE);
+		TWARN("Cannot find '%s'", ASYNCTHRIFT_CONFIG_FILE);
 		return false;
 	}
 
-	log4cxx::BasicConfigurator::resetConfiguration();
-	log4cxx::xml::DOMConfigurator::configure(qPrintable(config_dir.absoluteFilePath(LOG4CXX_CONFIG_FILE)));
+	TLogger::configure(qPrintable(config_dir.absoluteFilePath(LOG4CXX_CONFIG_FILE)));
 
 	QSettings settings(config_dir.absoluteFilePath(ASYNCTHRIFT_CONFIG_FILE), QSettings::IniFormat);
 
@@ -111,6 +107,11 @@ bool AsyncThriftForwarder::reloadConfig()
 	settings.endArray();
 
 	return true;
+}
+
+const char* TLoggerRoot()
+{
+	return "forwarder";
 }
 
 int main(int argc, char **argv)

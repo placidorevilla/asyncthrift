@@ -1,7 +1,7 @@
 #ifndef HBASEHANDLER_P_H
 #define HBASEHANDLER_P_H
 
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QObject>
 
@@ -10,6 +10,7 @@ class NBRingByteBuffer;
 class HBaseHandlerPrivate : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(HBaseHandlerPrivate)
+	T_LOGGER_DECLARE(HBaseHandlerPrivate);
 
 public:
 	HBaseHandlerPrivate();
@@ -19,8 +20,6 @@ public:
 
 private:
 	NBRingByteBuffer* buffer_;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 #endif // HBASEHANDLER_P_H

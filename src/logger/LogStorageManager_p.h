@@ -3,7 +3,7 @@
 
 #include "TMemFile.h"
 
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QThread>
 #include <QFile>
@@ -21,6 +21,7 @@ class StorageReadContext;
 class LogWriteThread : public QThread {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogWriteThread)
+	T_LOGGER_DECLARE(LogWriteThread);
 
 public:
 	explicit LogWriteThread(LogStorage* storage);
@@ -36,13 +37,12 @@ private:
 	bool quitNow;
 	NBRingByteBuffer* buffer;
 	LogStorage* storage;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 class LogSyncThread : public QThread {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogSyncThread)
+	T_LOGGER_DECLARE(LogSyncThread);
 
 public:
 	explicit LogSyncThread(LogStorage* storage);
@@ -53,13 +53,12 @@ public slots:
 
 private:
 	LogStorage* storage;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 class LogAllocateThread : public QThread {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogAllocateThread)
+	T_LOGGER_DECLARE(LogAllocateThread);
 
 public:
 	LogAllocateThread(const QString& dir, size_t size);
@@ -70,13 +69,12 @@ protected:
 private:
 	QString dir;
 	size_t size;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 class LogReadThread : public QThread {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogReadThread)
+	T_LOGGER_DECLARE(LogReadThread);
 
 public:
 	LogReadThread(QLocalSocket* socket, LogStorageManagerPrivate* manager);
@@ -97,8 +95,6 @@ private:
 	QDataStream stream;
 	uint64_t transaction;
 	LogReadContext *read_context;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 class LogReadContext {
@@ -114,6 +110,8 @@ private:
 };
 
 class StorageReadContext {
+	T_LOGGER_DECLARE(StorageReadContext);
+
 public:
 	StorageReadContext(LogStorage* storage, int index, TMemFile* file);
 	~StorageReadContext();
@@ -125,13 +123,12 @@ private:
 	LogStorage* storage;
 	int index;
 	TMemFile* file;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 class LogStorage : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogStorage)
+	T_LOGGER_DECLARE(LogStorage);
 
 	friend class LogSyncThread;
 	friend class LogWriteThread;
@@ -165,13 +162,12 @@ private:
 	LogAllocateThread* alloc_thread;
 	LogStorageManagerPrivate* manager;
 	int32_t need_sync;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 class LogStorageManagerPrivate : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogStorageManagerPrivate)
+	T_LOGGER_DECLARE(LogStorageManagerPrivate);
 
 public:
 	LogStorageManagerPrivate(QObject* parent);
@@ -202,8 +198,6 @@ private:
 	QTimer sync_timer;
 	QLocalServer logger_server;
 	QVector<LogReadThread*> read_threads;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 #endif // LOGSTORAGEMANAGER_P_H

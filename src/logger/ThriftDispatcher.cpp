@@ -21,7 +21,7 @@ using boost::shared_ptr;
 
 using namespace apache::hadoop::hbase::thrift;
 
-log4cxx::LoggerPtr ThriftDispatcher::logger(log4cxx::Logger::getLogger(ThriftDispatcher::staticMetaObject.className()));
+T_QLOGGER_DEFINE_ROOT(ThriftDispatcher);
 
 class ThriftDispatcherPrivate {
 	friend class ThriftDispatcher;
@@ -91,7 +91,7 @@ void ThriftDispatcher::stop()
 void ThriftDispatcher::set_port(unsigned int port)
 {
 	if (d->running() && port != d->port())
-		LOG4CXX_WARN(logger, "Cannot change the binding port while running");
+		TWARN("Cannot change the binding port while running");
 
 	d->set_port(port);
 }

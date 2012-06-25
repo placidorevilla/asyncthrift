@@ -5,7 +5,7 @@
 
 #include <Thrift.h>
 
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QObject>
 
@@ -17,6 +17,7 @@ class HBaseHandlerPrivate;
 class HBaseHandler : public QObject, virtual public HbaseIf {
 	Q_OBJECT
 	Q_DISABLE_COPY(HBaseHandler)
+	T_LOGGER_DECLARE(HBaseHandler);
 
 public:
 	HBaseHandler();
@@ -174,8 +175,6 @@ public:
 	}
 private:
 	HBaseHandlerPrivate* d;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 #endif // HBASEHANDLER_H

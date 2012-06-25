@@ -6,7 +6,7 @@
 #include "LogEndian.h"
 #include "HBaseClient.h"
 
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QThread>
 #include <QLocalSocket>
@@ -22,6 +22,7 @@ class PendingRequest;
 class ForwarderManagerPrivate : public QThread {
 	Q_OBJECT
 	Q_DECLARE_PUBLIC(ForwarderManager)
+	T_LOGGER_DECLARE(ForwarderManagerPrivate);
 
 	enum State { STATE_READ_LEN, STATE_READ_PAYLOAD, STATE_FORWARDING, STATE_STALLED, STATE_DELAYED };
 
@@ -62,14 +63,13 @@ private:
 	AsyncHBase::HBaseClient* hbase_client;
 
 	ForwarderManager* q_ptr;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 class BatchRequests : public QObject
 {
 	Q_OBJECT
 	Q_DISABLE_COPY(BatchRequests)
+	T_LOGGER_DECLARE(BatchRequests);
 
 public:
 	BatchRequests(size_t len, QObject* parent = 0) : QObject(parent), buffer_(len) {}
@@ -90,8 +90,6 @@ private slots:
 private:
 	QVector<char> buffer_;
 	QSet<PendingRequest*> pending_requests;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 class PendingRequest : public QFutureWatcher<void>

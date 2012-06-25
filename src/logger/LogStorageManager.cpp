@@ -20,14 +20,14 @@
 
 #include "config.h"
 
-log4cxx::LoggerPtr LogStorageManager::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
-log4cxx::LoggerPtr LogStorageManagerPrivate::logger(log4cxx::Logger::getLogger(LogStorageManager::staticMetaObject.className()));
-log4cxx::LoggerPtr LogStorage::logger(log4cxx::Logger::getLogger(LogStorage::staticMetaObject.className()));
-log4cxx::LoggerPtr LogWriteThread::logger(log4cxx::Logger::getLogger(LogWriteThread::staticMetaObject.className()));
-log4cxx::LoggerPtr LogSyncThread::logger(log4cxx::Logger::getLogger(LogSyncThread::staticMetaObject.className()));
-log4cxx::LoggerPtr LogAllocateThread::logger(log4cxx::Logger::getLogger(LogAllocateThread::staticMetaObject.className()));
-log4cxx::LoggerPtr LogReadThread::logger(log4cxx::Logger::getLogger(LogReadThread::staticMetaObject.className()));
-log4cxx::LoggerPtr StorageReadContext::logger(log4cxx::Logger::getLogger(LogReadThread::staticMetaObject.className()));
+T_QLOGGER_DEFINE_ROOT(LogStorageManager);
+T_QLOGGER_DEFINE_OTHER_ROOT(LogStorageManagerPrivate, LogStorageManager);
+T_QLOGGER_DEFINE_ROOT(LogStorage);
+T_QLOGGER_DEFINE_ROOT(LogWriteThread);
+T_QLOGGER_DEFINE_ROOT(LogSyncThread);
+T_QLOGGER_DEFINE_ROOT(LogAllocateThread);
+T_QLOGGER_DEFINE_ROOT(LogReadThread);
+T_QLOGGER_DEFINE_OTHER_ROOT(StorageReadContext, LogReadThread);
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
 // TODO: this should be config
@@ -45,7 +45,7 @@ LogStorageManager::~LogStorageManager()
 
 bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_period, const QStringList& dirs)
 {
-	LOG4CXX_DEBUG(logger, "Configuring storages");
+	TDEBUG("Configuring storages");
 
 	d->set_max_log_size(max_log_size);
 	d->create_storages(dirs);
@@ -76,7 +76,7 @@ void LogStorageManagerPrivate::create_storages(const QStringList& dirs)
 	foreach (const QString& dir, dirs) {
 		QString canonical = QDir(dir).canonicalPath();
 		if (unique_storages.contains(canonical)) {
-			LOG4CXX_WARN(logger, "Configuration has repeated logging dirs. Ignoring.");
+			TWARN("Configuration has repeated logging dirs. Ignoring.");
 			continue;
 		}
 		unique_storages.insert(canonical);
@@ -86,13 +86,13 @@ void LogStorageManagerPrivate::create_storages(const QStringList& dirs)
 		foreach (LogStorage* storage, storages) {
 			QString dir(storage->path());
 			if (!unique_storages.contains(dir)) {
-				LOG4CXX_WARN(logger, "Cannot reconfigure storages while running");
+				TWARN("Cannot reconfigure storages while running");
 				return;
 			}
 			unique_storages.remove(dir);
 		}
 		if (!unique_storages.isEmpty())
-			LOG4CXX_WARN(logger, "Cannot reconfigure storages while running");
+			TWARN("Cannot reconfigure storages while running");
 		return;
 	}
 
@@ -137,7 +137,7 @@ void LogStorageManagerPrivate::finished_logger_connection()
 	delete read_thread;
 	read_threads.remove(read_threads.indexOf(read_thread));
 
-	LOG4CXX_DEBUG(logger, "Finished read thread");
+	TDEBUG("Finished read thread");
 }
 
 void LogStorageManagerPrivate::set_sync_period(unsigned int sync_period)
@@ -327,7 +327,7 @@ StorageReadContext* LogStorage::begin_read(uint64_t transaction)
 
 	// TODO: this can't happen
 	if (index == -1) {
-		LOG4CXX_DEBUG(logger, "should have opened the current file");
+		TDEBUG("should have opened the current file");
 		return 0;
 	}
 
@@ -343,7 +343,7 @@ TMemFile* LogStorage::advance_next_file(int* index)
 {
 	TMemFile* file = 0;
 
-	LOG4CXX_DEBUG(logger, "advance_next_file");
+	TDEBUG("advance_next_file");
 
 	// TODO: this can't happen
 	if (*index == -1)
@@ -352,7 +352,7 @@ TMemFile* LogStorage::advance_next_file(int* index)
 	auto log_index = file_to_transaction_map.find(*index) + 1;
 
 	if (log_index == file_to_transaction_map.end()) {
-		LOG4CXX_DEBUG(logger, "We need to open the current file");
+		TDEBUG("We need to open the current file");
 		// TODO: open the current writing file
 		*index = -1;
 		return 0;
@@ -374,10 +374,10 @@ void LogStorage::map_log_file(int log_index, bool only_start)
 	uint64_t transaction, first_good_transaction = 0, last_good_transaction = 0;
 	uint64_t timestamp_and_len;
 	if (log_file.read((char*)&transaction, sizeof(transaction)) != sizeof(transaction)) {
-		LOG4CXX_WARN(logger, qPrintable(QString("Corrupt log file: '%1'").arg(log_file.file()->fileName())));
+		TWARN("Corrupt log file: '%s'", qPrintable(log_file.file()->fileName()));
 	} else {
 		first_good_transaction = transaction = LOG_ENDIAN(transaction);
-		LOG4CXX_INFO(logger, qPrintable(QString("First good transaction for file '%1' is %2").arg(log_file.file()->fileName()).arg(first_good_transaction)));
+		TINFO("First good transaction for file '%s' is %lu", qPrintable(log_file.file()->fileName()), first_good_transaction);
 		while(!only_start && transaction != 0) {
 			last_good_transaction = transaction;
 			if (log_file.read((char*)&timestamp_and_len, sizeof(timestamp_and_len)) != sizeof(timestamp_and_len))
@@ -389,7 +389,7 @@ void LogStorage::map_log_file(int log_index, bool only_start)
 				break;
 			transaction = LOG_ENDIAN(transaction);
 		}
-		LOG4CXX_INFO(logger, qPrintable(QString("Last good transaction for file '%1' is %2").arg(log_file.file()->fileName()).arg(last_good_transaction)));
+		TINFO("Last good transaction for file '%s' is %lu", qPrintable(log_file.file()->fileName()), last_good_transaction);
 		if (first_good_transaction != 0) {
 			file_to_transaction_map.insert(log_index, qMakePair(first_good_transaction, last_good_transaction));
 		} else {
@@ -462,7 +462,7 @@ void LogStorage::sync()
 	if (!need_sync)
 		return;
 	QMutexLocker locker(&file_guard);
-	LOG4CXX_DEBUG(logger, "Syncing storage");
+	TDEBUG("Syncing storage");
 	current_log.sync();
 	need_sync = false;
 }
@@ -498,13 +498,13 @@ void LogStorage::write(void* buffer, size_t size)
 	current_log.write((const char*)&transaction, sizeof(transaction));
 	current_log.write((const char*)&timestamp_and_len, sizeof(timestamp_and_len));
 	if ((size_t)current_log.write((const char*)buffer, size) != size)
-		LOG4CXX_ERROR(logger, "Short write on log. This will CORRUPT the log file!");
+		TERROR("Short write on log. This will CORRUPT the log file!");
 	if (rounded_size != size)
 		current_log.write(padding_buffer, rounded_size - size);
 	current_log.write((const char*)&crc, sizeof(crc));
 
 	need_sync = true;
-	LOG4CXX_DEBUG(logger, "Log transaction");
+	TDEBUG("Log transaction");
 }
 
 LogAllocateThread::LogAllocateThread(const QString& dir, size_t size) : dir(dir), size(size)
@@ -519,7 +519,7 @@ void LogAllocateThread::run()
 	tmp_file.open();
 
 	if (posix_fallocate(tmp_file.handle(), 0, size))
-		LOG4CXX_WARN(logger, "Error allocating space for next LogFile");
+		TWARN("Error allocating space for next LogFile");
 	tmp_file.rename(storage_dir.absoluteFilePath("asyncthrift.next.log"));
 }
 
@@ -560,7 +560,7 @@ void LogWriteThread::run()
 		if (!request) {
 			QCoreApplication::processEvents();
 			if (quitNow) {
-				LOG4CXX_DEBUG(logger, "Exiting write thread");
+				TDEBUG("Exiting write thread");
 				return;
 			}
 			continue;
@@ -594,7 +594,7 @@ LogReadThread::LogReadThread(QLocalSocket* socket, LogStorageManagerPrivate* man
 
 void LogReadThread::run()
 {
-	LOG4CXX_DEBUG(logger, "Start read thread");
+	TDEBUG("Start read thread");
 	connect(socket, SIGNAL(disconnected()), SLOT(quit()));
 	connect(socket, SIGNAL(readyRead()), SLOT(handle_ready_read()));
 	connect(socket, SIGNAL(bytesWritten(qint64)), SLOT(handle_bytes_written(qint64)));
@@ -629,7 +629,7 @@ void LogReadThread::handle_ready_read()
 		stream.readRawData((char*)& tx, sizeof(tx));
 	tx = LOG_ENDIAN(tx);
 
-	LOG4CXX_DEBUG(logger, qPrintable(QString("Pending transaction %1").arg(tx)));
+	TDEBUG("Pending transaction %lu", tx);
 
 	if (transaction == 0) {
 		transaction = tx;

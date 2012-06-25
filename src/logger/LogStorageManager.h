@@ -1,7 +1,7 @@
 #ifndef LOGSTORAGEMANAGER_H
 #define LOGSTORAGEMANAGER_H
 
-#include <log4cxx/logger.h>
+#include "TLogger.h"
 
 #include <QObject>
 
@@ -11,6 +11,7 @@ class QStringList;
 class LogStorageManager : public QObject {
 	Q_OBJECT
 	Q_DISABLE_COPY(LogStorageManager)
+	T_LOGGER_DECLARE(LogStorageManager);
 
 public:
 	explicit LogStorageManager(QObject* parent = 0);
@@ -20,8 +21,6 @@ public:
 
 private:
 	LogStorageManagerPrivate* d;
-
-	static log4cxx::LoggerPtr logger;
 };
 
 #endif // LOGSTORAGEMANAGER_H
