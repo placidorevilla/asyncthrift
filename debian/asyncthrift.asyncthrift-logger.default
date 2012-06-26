@@ -1,6 +1,6 @@
-# Defaults for asyncthrift initscript
-# sourced by /etc/init.d/asyncthrift
-# installed at /etc/default/asyncthrift by the maintainer scripts
+# Defaults for asyncthrift-logger initscript
+# sourced by /etc/init.d/asyncthrift-logger
+# installed at /etc/default/asyncthrift-logger by the maintainer scripts
 
 #
 # This is a POSIX shell fragment
