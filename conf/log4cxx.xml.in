@@ -8,26 +8,26 @@
 		</layout>
 	</appender>
 
-	<appender name=\"ROLLING_FILE_LOGGER\" class=\"org.apache.log4j.RollingFileAppender\">
+	<appender name=\"ROLLING_FILE_LOGGER\" class=\"org.apache.log4j.rolling.RollingFileAppender\">
+		<param name=\"file\" value=\"$${LOCALSTATEDIR}/log/$${PACKAGE}/logger.log\"/>
+		<param name=\"append\" value=\"true\"/>
 		<rollingPolicy class=\"org.apache.log4j.rolling.TimeBasedRollingPolicy\">
 			<param name=\"activeFileName\" value=\"$${LOCALSTATEDIR}/log/$${PACKAGE}/logger.log\"/>
 			<param name=\"fileNamePattern\" value=\"$${LOCALSTATEDIR}/log/$${PACKAGE}/logger.%d.log.gz\"/>
 		</rollingPolicy>
-		<param name=\"file\" value=\"$${LOCALSTATEDIR}/log/$${PACKAGE}/logger.log\"/>
-		<param name=\"append\" value=\"true\"/>
 
 		<layout class=\"org.apache.log4j.PatternLayout\">
 			<param name=\"ConversionPattern\" value=\"%d{ISO8601} [%t] %-5p %c %x - %m%n\"/>
 		</layout>
 	</appender>
 
-	<appender name=\"ROLLING_FILE_FORWARDER\" class=\"org.apache.log4j.RollingFileAppender\">
+	<appender name=\"ROLLING_FILE_FORWARDER\" class=\"org.apache.log4j.rolling.RollingFileAppender\">
+		<param name=\"file\" value=\"$${LOCALSTATEDIR}/log/$${PACKAGE}/forwarder.log\"/>
+		<param name=\"append\" value=\"true\"/>
 		<rollingPolicy class=\"org.apache.log4j.rolling.TimeBasedRollingPolicy\">
 			<param name=\"activeFileName\" value=\"$${LOCALSTATEDIR}/log/$${PACKAGE}/forwarder.log\"/>
 			<param name=\"fileNamePattern\" value=\"$${LOCALSTATEDIR}/log/$${PACKAGE}/forwarder.%d.log.gz\"/>
 		</rollingPolicy>
-		<param name=\"file\" value=\"$${LOCALSTATEDIR}/log/$${PACKAGE}/forwarder.log\"/>
-		<param name=\"append\" value=\"true\"/>
 
 		<layout class=\"org.apache.log4j.PatternLayout\">
 			<param name=\"ConversionPattern\" value=\"%d{ISO8601} [%t] %-5p %c %x - %m%n\"/>
@@ -52,18 +52,18 @@
 		<appender-ref ref=\"ROLLING_FILE_FORWARDER\"/>
 	</appender>
 
-	<root>
-		<priority value=\"DEBUG\"/>
-		<appender-ref ref=\"CONSOLE\"/>
-	</root>
-
 	<logger name=\"logger\" additivity=\"false\">
-		<priority value=\"DEBUG\"/>
+		<level value=\"DEBUG\"/>
 		<appender-ref ref=\"ASYNC_LOGGER\"/>
 	</logger>
 
 	<logger name=\"forwarder\" additivity=\"false\">
-		<priority value=\"DEBUG\"/>
+		<level value=\"DEBUG\"/>
 		<appender-ref ref=\"ASYNC_FORWARDER\"/>
 	</logger>
+
+	<root>
+		<level value=\"DEBUG\"/>
+		<appender-ref ref=\"CONSOLE\"/>
+	</root>
 </log4j:configuration>

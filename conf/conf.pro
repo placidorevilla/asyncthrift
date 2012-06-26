@@ -7,6 +7,7 @@ INSTALLDIR = $$PKGSYSCONFDIR
 
 BUILD_SUBSTITUTES = \
 	./asyncthrift.ini.in \
-	./log4cxx.xml.in
+	./log4cxx.xml.in \
+	./log4j.xml.in
 
 include($$TOP_SRCDIR/asyncthrift.pri)

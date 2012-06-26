@@ -6,10 +6,11 @@ include($$TOP_SRCDIR/asyncthrift.pri)
 
 JAVA_DEPS = \
 	java/asynchbase-1.2.0.jar.md5 \
-	java/log4j-over-slf4j-1.6.4.jar.md5 \
 	java/netty-3.3.1.Final.jar.md5 \
 	java/slf4j-api-1.6.4.jar.md5 \
-	java/slf4j-simple-1.6.4.jar.md5 \
+	java/slf4j-log4j12-1.6.4.jar.md5 \
+	java/log4j-1.2.16.jar.md5 \
+	java/apache-log4j-extras-1.0.jar.md5 \
 	java/suasync-1.2.0.jar.md5 \
 	java/zookeeper-3.3.4.jar.md5
 
