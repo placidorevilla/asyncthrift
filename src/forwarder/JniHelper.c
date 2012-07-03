@@ -441,23 +441,28 @@ JNIEnv* getJNIEnv(void)
 		char *jvmArgs = getenv("LIBJVM_OPTS");
 		char jvmArgDelims[] = " ";
 		if (jvmArgs != NULL)  {
+			jvmArgs = strdup(jvmArgs);
 			char *result = NULL;
 			result = strtok( jvmArgs, jvmArgDelims );
 			while ( result != NULL ) {
 				noArgs++;
 				result = strtok( NULL, jvmArgDelims);
 			}
+			free(jvmArgs);
 		}
 		JavaVMOption options[noArgs];
 		options[0].optionString = optClassPath;
 		options[1].optionString = "-Xrs";
+		jvmArgs = getenv("LIBJVM_OPTS");
 		//fill in any specified arguments
 		if (jvmArgs != NULL)  {
+			jvmArgs = strdup(jvmArgs);
 			char *result = NULL;
 			result = strtok( jvmArgs, jvmArgDelims );	
 			int argNum = 2;
 			for (;argNum < noArgs ; argNum++) {
 				options[argNum].optionString = result;
+				result = strtok( NULL, jvmArgDelims );	
 			}
 		}
 
