@@ -82,10 +82,8 @@ public:
 protected:
 	virtual void run();
 
-private:
-	void write_transactions();
-
 private slots:
+	void write_transactions();
 	void handle_ready_read();
 	void handle_bytes_written(qint64 bytes);
 
@@ -154,6 +152,9 @@ private slots:
 private:
 	QDir storage_dir;
 	TMemFile current_log;
+	int current_index;
+	uint64_t first_transaction;
+	uint64_t last_transaction;
 	QMutex file_guard;
 	QMap<int, QPair<uint64_t, uint64_t> > file_to_transaction_map;
 	QSet<int> invalid_files_map;

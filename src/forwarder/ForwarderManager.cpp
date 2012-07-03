@@ -28,6 +28,7 @@ ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QStr
 	QDir state_dir(PKGSTATEDIR);
 
 	// TODO: configure the HBaseClient object
+	// setFlushInterval
 	moveToThread(this);
 	socket.moveToThread(this);
 	socket.setReadBufferSize(MAX_SOCKET_BUFFER_SIZE);
@@ -45,7 +46,6 @@ ForwarderManagerPrivate::~ForwarderManagerPrivate()
 
 void ForwarderManagerPrivate::run()
 {
-	qsrand(time(NULL));
 	QTimer::singleShot(0, this, SLOT(reconnect()));
 	connect(&socket, SIGNAL(connected()), SLOT(handle_connected()));
 	connect(&socket, SIGNAL(error(QLocalSocket::LocalSocketError)), SLOT(handle_error(QLocalSocket::LocalSocketError)));
@@ -73,6 +73,7 @@ void ForwarderManagerPrivate::handle_connected()
 		tx_ptr_file.flush();
 		tx_ptr_stream.device()->seek(0);
 	}
+	stream.resetStatus();
 	stream.writeRawData((char *)&transaction, sizeof(transaction));
 }
 

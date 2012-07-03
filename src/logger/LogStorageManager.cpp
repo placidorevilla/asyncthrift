@@ -137,7 +137,7 @@ void LogStorageManagerPrivate::finished_logger_connection()
 	delete read_thread;
 	read_threads.remove(read_threads.indexOf(read_thread));
 
-	TDEBUG("Finished read thread");
+	TINFO("Finished read thread");
 }
 
 void LogStorageManagerPrivate::set_sync_period(unsigned int sync_period)
@@ -216,8 +216,8 @@ bool LogReadContext::read_next_transaction(char** buffer, size_t* size)
 	
 	foreach (StorageReadContext* context, storage_contexts) {
 		if (!context->peek_next_transaction(buffer, size)) {
-			// TODO: check if we are blocked waiting for events
-			context->advance();
+			if (!context->advance())
+				continue;
 			if (!context->peek_next_transaction(buffer, size))
 				continue;
 		}
@@ -246,9 +246,6 @@ StorageReadContext::~StorageReadContext()
 
 bool StorageReadContext::peek_next_transaction(char** buffer, size_t* size)
 {
-	// TODO: this can't happen
-	if (!file)
-		return false;
 	char* buf = (char*)file->buffer();
 	if (LOG_ENDIAN(*(uint64_t *)(buf + file->pos())) == 0)
 		return false;
@@ -263,17 +260,15 @@ bool StorageReadContext::advance(uint64_t transaction)
 	uint64_t current_transaction;
 	size_t size;
 
-	// TODO: this can't happen
-	if (!file)
-		return false;
-
 	do {
 		buffer = (char*)file->buffer() + file->pos();
 		if (((size_t)(file->size() - file->pos()) < (3 * sizeof(uint64_t))) || ((current_transaction = LOG_ENDIAN(*(uint64_t*)buffer)) == 0)) {
-			delete file;
-			file = storage->advance_next_file(&index);
-			if (file)
+			TMemFile* new_file = storage->advance_next_file(&index);
+			if (new_file) {
+				delete file;
+				file = new_file;
 				return true;
+			}
 			return false;
 		}
 		if (transaction == 0 || transaction > current_transaction) {
@@ -285,7 +280,7 @@ bool StorageReadContext::advance(uint64_t transaction)
 	return true;
 }
 
-LogStorage::LogStorage(LogStorageManagerPrivate* manager, const QString& dir) : QObject(manager), storage_dir(dir), write_thread(new LogWriteThread(this)), sync_thread(new LogSyncThread(this)), manager(manager), need_sync(false)
+LogStorage::LogStorage(LogStorageManagerPrivate* manager, const QString& dir) : QObject(manager), storage_dir(dir), current_index(-1), first_transaction(0), last_transaction(0), write_thread(new LogWriteThread(this)), sync_thread(new LogSyncThread(this)), manager(manager), need_sync(false)
 {
 	get_next_file();
 }
@@ -308,55 +303,47 @@ StorageReadContext* LogStorage::begin_read(uint64_t transaction)
 	TMemFile* file = 0;
 	int index = -1;
 
-	// TODO: check if the current writing file is the one we need
-	
-	QList<int> known_files = file_to_transaction_map.keys();
-	if (known_files.size() > 0)
-		index = *known_files.begin();
-	for (auto log_index = known_files.end();;) {
-		if (log_index == known_files.begin())
-			break;
-		log_index--;
-		if (file_to_transaction_map[*log_index].first == 0)
-			map_log_file(*log_index, true);
-		if (file_to_transaction_map.contains(*log_index) && file_to_transaction_map[*log_index].first <= transaction) {
-			index = *log_index;
-			break;
+	if (first_transaction == 0 || transaction < first_transaction) {
+		QList<int> known_files = file_to_transaction_map.keys();
+		if (known_files.size() > 0)
+			index = *known_files.begin();
+		// Don't test the current file
+		known_files.removeLast();
+		for (auto log_index = known_files.end();;) {
+			if (log_index == known_files.begin())
+				break;
+			log_index--;
+			if (file_to_transaction_map[*log_index].first == 0)
+				map_log_file(*log_index, true);
+			if (file_to_transaction_map.contains(*log_index) && file_to_transaction_map[*log_index].first <= transaction) {
+				index = *log_index;
+				break;
+			}
 		}
-	}
-
-	// TODO: this can't happen
-	if (index == -1) {
-		TDEBUG("should have opened the current file");
-		return 0;
+	} else {
+		index = current_index;
 	}
 
 	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(index, 4, 10, QChar('0'))));
 	file->open(QIODevice::ReadWrite);
 
 	StorageReadContext* context = new StorageReadContext(this, index, file);
+	locker.unlock();
 	context->advance(transaction);
 	return context;
 }
 
 TMemFile* LogStorage::advance_next_file(int* index)
 {
+	QMutexLocker locker(&file_guard);
 	TMemFile* file = 0;
+
+	if (*index == current_index)
+		return 0;
 
 	TDEBUG("advance_next_file");
 
-	// TODO: this can't happen
-	if (*index == -1)
-		return 0;
-
 	auto log_index = file_to_transaction_map.find(*index) + 1;
-
-	if (log_index == file_to_transaction_map.end()) {
-		TDEBUG("We need to open the current file");
-		// TODO: open the current writing file
-		*index = -1;
-		return 0;
-	}
 
 	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(log_index.key(), 4, 10, QChar('0'))));
 	file->open(QIODevice::ReadWrite);
@@ -389,7 +376,8 @@ void LogStorage::map_log_file(int log_index, bool only_start)
 				break;
 			transaction = LOG_ENDIAN(transaction);
 		}
-		TINFO("Last good transaction for file '%s' is %lu", qPrintable(log_file.file()->fileName()), last_good_transaction);
+		if (!only_start)
+			TINFO("Last good transaction for file '%s' is %lu", qPrintable(log_file.file()->fileName()), last_good_transaction);
 		if (first_good_transaction != 0) {
 			file_to_transaction_map.insert(log_index, qMakePair(first_good_transaction, last_good_transaction));
 		} else {
@@ -404,6 +392,10 @@ void LogStorage::get_next_file()
 {
 	QMutexLocker locker(&file_guard);
 	int next_log_index = -1;
+	bool new_file = true;
+
+	if (current_index != -1)
+		file_to_transaction_map.insert(current_index, qMakePair(first_transaction, last_transaction));
 
 	foreach(const QString& log_filename, storage_dir.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort)) {
 		int log_index = log_filename.mid(12, 4).toInt();
@@ -412,6 +404,9 @@ void LogStorage::get_next_file()
 			file_to_transaction_map.insert(log_index, qMakePair(0UL, 0UL));
 	}
 
+	next_log_index++;
+
+	// Find the last transaction that was logged
 	QList<int> known_files = file_to_transaction_map.keys();
 	for (auto log_index = known_files.end();;) {
 		if (log_index == known_files.begin())
@@ -429,31 +424,40 @@ void LogStorage::get_next_file()
 	if (!invalid_files_map.isEmpty()) {
 		int potential_index = *std::max_element(invalid_files_map.begin(), invalid_files_map.end());
 		if (file_to_transaction_map.isEmpty() || (file_to_transaction_map.end() - 1).key() < potential_index) {
-			if (current_log.isOpen())
-				current_log.close();
-			current_log.file()->setFileName(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(potential_index, 4, 10, QChar('0'))));
-			current_log.open(QIODevice::ReadWrite);
-			return;
+			next_log_index = potential_index;
+			new_file = false;
 		}
 	}
-
-	next_log_index++;
 
 	if (!storage_dir.exists("asyncthrift.next.log")) {
 		alloc_thread = new LogAllocateThread(storage_dir.canonicalPath(), manager->max_log_size());
 		alloc_thread->start();
-		alloc_thread->wait();
+		if (new_file)
+			alloc_thread->wait();
 	}
 
 	if (current_log.isOpen())
 		current_log.close();
 
-	current_log.file()->setFileName(storage_dir.absoluteFilePath("asyncthrift.next.log"));
-	current_log.file()->rename(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
-	current_log.open(QIODevice::ReadWrite);
+	if (new_file) {
+		current_log.file()->setFileName(storage_dir.absoluteFilePath("asyncthrift.next.log"));
+		current_log.file()->rename(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
+	} else {
+		current_log.file()->setFileName(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
+	}
 
-	alloc_thread = new LogAllocateThread(storage_dir.canonicalPath(), manager->max_log_size());
-	alloc_thread->start();
+	current_log.open(QIODevice::ReadWrite);
+	current_index = next_log_index;
+	first_transaction = 0;
+	last_transaction = 0;
+	file_to_transaction_map.insert(current_index, qMakePair(first_transaction, last_transaction));
+	invalid_files_map.remove(current_index);
+
+	if (new_file) {
+		// Preallocate the next log file
+		alloc_thread = new LogAllocateThread(storage_dir.canonicalPath(), manager->max_log_size());
+		alloc_thread->start();
+	}
 }
 
 void LogStorage::sync()
@@ -495,16 +499,24 @@ void LogStorage::write(void* buffer, size_t size)
 	timestamp_and_len = LOG_ENDIAN(now | (rounded_size << (sizeof(uint32_t) * 8)));
 //	printf("ts: %x, size: %x, val: %lx\n", (uint32_t) now, (uint32_t) rounded_size, timestamp_and_len);
 	crc = LOG_ENDIAN(lzma_crc64(reinterpret_cast<uint8_t*>(buffer), size, 0));
-	current_log.write((const char*)&transaction, sizeof(transaction));
+	// We reserve the space and write the transaction at the end to ensure that a reader doesn't get a partially written transaction
+	current_log.write((const char*)&padding_buffer, sizeof(transaction));
 	current_log.write((const char*)&timestamp_and_len, sizeof(timestamp_and_len));
 	if ((size_t)current_log.write((const char*)buffer, size) != size)
 		TERROR("Short write on log. This will CORRUPT the log file!");
 	if (rounded_size != size)
 		current_log.write(padding_buffer, rounded_size - size);
 	current_log.write((const char*)&crc, sizeof(crc));
+	current_log.seek(current_log.pos() - (size + sizeof(crc) + sizeof(timestamp_and_len) + sizeof(transaction)));
+	current_log.write((const char*)&transaction, sizeof(transaction));
+	current_log.seek(current_log.pos() + (size + sizeof(crc) + sizeof(timestamp_and_len)));
 
+	transaction = LOG_ENDIAN(transaction);
+	if (first_transaction == 0)
+		first_transaction = transaction;
+	last_transaction = transaction;
 	need_sync = true;
-	TDEBUG("Log transaction");
+//	TDEBUG("Log transaction %lu", transaction);
 }
 
 LogAllocateThread::LogAllocateThread(const QString& dir, size_t size) : dir(dir), size(size)
@@ -555,12 +567,14 @@ void LogWriteThread::run()
 	unsigned long buf_transaction;
 	char local_buffer[4096];
 
+	TINFO("Begin write thread");
+
 	while (true) {
 		request = buffer->fetch_read(&request_size, &buf_transaction, RINGBUFFER_READ_TIMEOUT);
 		if (!request) {
 			QCoreApplication::processEvents();
 			if (quitNow) {
-				TDEBUG("Exiting write thread");
+				TINFO("Exiting write thread");
 				return;
 			}
 			continue;
@@ -594,7 +608,7 @@ LogReadThread::LogReadThread(QLocalSocket* socket, LogStorageManagerPrivate* man
 
 void LogReadThread::run()
 {
-	TDEBUG("Start read thread");
+	TINFO("Start read thread");
 	connect(socket, SIGNAL(disconnected()), SLOT(quit()));
 	connect(socket, SIGNAL(readyRead()), SLOT(handle_ready_read()));
 	connect(socket, SIGNAL(bytesWritten(qint64)), SLOT(handle_bytes_written(qint64)));
@@ -613,7 +627,13 @@ void LogReadThread::write_transactions()
 	size_t size;
 	int max_to_write = MAX_TRANSACTIONS_SENT_PER_LOOP;
 
-	while (max_to_write-- && stream.device()->bytesToWrite() < MAX_CLIENT_BUFFER && manager->read_next_transaction(read_context, &buffer, &size)) {
+	while (max_to_write-- && stream.device()->bytesToWrite() < MAX_CLIENT_BUFFER) {
+		if (!manager->read_next_transaction(read_context, &buffer, &size)) {
+			// If there are no available transactions, retry in a while
+			// TODO: do something nicer to keep reading
+			QTimer::singleShot(100, this, SLOT(write_transactions()));
+			break;
+		}
 		stream.writeBytes(buffer, size);
 	}
 }
