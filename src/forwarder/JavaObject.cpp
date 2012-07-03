@@ -84,6 +84,9 @@ const char* JavaException::name() const
 		const char* utfName(env->GetStringUTFChars(name, 0));
 		exception_name = strdup(utfName);
 		env->ReleaseStringUTFChars(name, utfName);
+
+		env->DeleteLocalRef(exccls);
+		env->DeleteLocalRef(clscls);
 	}
 
 	return exception_name;
@@ -101,6 +104,8 @@ const char* JavaException::what() const throw()
 		const char* utfMessage(env->GetStringUTFChars(message, 0));
 		exception_message = strdup(utfMessage);
 		env->ReleaseStringUTFChars(message, utfMessage);
+
+		env->DeleteLocalRef(exccls);
 	}
 
 	return exception_message;

@@ -102,7 +102,7 @@ DEFINE_JAVA_CLASS_NAME(Deferred, "com/stumbleupon/async/Deferred");
 
 Deferred::Deferred(jobject& object) : QFutureInterface<void>(QFutureInterfaceBase::Running), JavaObject()
 {
-	setJObject(object);
+	setJObjectLocal(object);
 }
 
 QFuture<void> Deferred::newFuture(jobject& object)
@@ -123,7 +123,8 @@ void Deferred::connect()
 	jclass cls = env->FindClass(generic_callback_class_name);
 	jfieldID fid = env->GetFieldID(cls, "native_object", "J");
 	env->SetLongField(cb, fid, (long) this);
-	invokeInstanceMethod("addBoth", "(Lcom/stumbleupon/async/Callback;)Lcom/stumbleupon/async/Deferred;", cb);
+	env->DeleteLocalRef(cls);
+	env->DeleteLocalRef(invokeInstanceMethod("addBoth", "(Lcom/stumbleupon/async/Callback;)Lcom/stumbleupon/async/Deferred;", cb).l);
 }
 
 Deferred::~Deferred()
@@ -146,6 +147,9 @@ jobject Deferred::call(jobject arg)
 		jmethodID getMessage(env->GetMethodID(exccls, "getMessage", "()Ljava/lang/String;"));
 		jstring message(static_cast<jstring>(env->CallObjectMethod(arg, getMessage)));
 		const char* utfMessage(env->GetStringUTFChars(message, 0));
+
+		env->DeleteLocalRef(exccls);
+		env->DeleteLocalRef(clscls);
 
 		if (strcmp(utfName, "org.hbase.async.ConnectionResetException") == 0) {
 			this->reportException(ConnectionResetException(utfMessage));

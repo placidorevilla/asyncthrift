@@ -42,6 +42,7 @@ ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QStr
 
 ForwarderManagerPrivate::~ForwarderManagerPrivate()
 {
+	// TODO: hbase_client.shutdown
 }
 
 void ForwarderManagerPrivate::run()
