@@ -5,8 +5,9 @@ QMAKE_LINK = @: IGNORE THIS LINE
 include($$TOP_SRCDIR/asyncthrift.pri)
 
 JAVA_DEPS = \
-	java/asynchbase-1.2.0.jar.md5 \
-	java/netty-3.3.1.Final.jar.md5 \
+	java/asynchbase-1.3.1.jar.md5 \
+	java/netty-3.4.3.Final.jar.md5 \
+	java/guava-12.0.jar.md5 \
 	java/slf4j-api-1.6.4.jar.md5 \
 	java/slf4j-log4j12-1.6.4.jar.md5 \
 	java/log4j-1.2.16.jar.md5 \
@@ -16,7 +17,7 @@ JAVA_DEPS = \
 
 java_dep.input = JAVA_DEPS
 java_dep.output = $$TOP_BUILDDIR/target/$$PKGDATADIR/java/${QMAKE_FILE_IN_BASE}
-java_dep.commands = curl -sS `cat ${QMAKE_FILE_IN} | cut -b 33-` -o ${QMAKE_FILE_OUT} && test `md5sum ${QMAKE_FILE_OUT} | awk \'{print \$$1;}\'` = `cat ${QMAKE_FILE_IN} | cut -b -32` || (rm ${QMAKE_FILE_OUT} && false)
+java_dep.commands = curl -sS --compressed `cat ${QMAKE_FILE_IN} | cut -b 33-` -o ${QMAKE_FILE_OUT} && test `md5sum ${QMAKE_FILE_OUT} | awk \'{print \$$1;}\'` = `cat ${QMAKE_FILE_IN} | cut -b -32` || (rm ${QMAKE_FILE_OUT} && false)
 silent:java_dep.commands = @echo downloading ${QMAKE_FILE_OUT_BASE} && $$java_dep.commands
 java_dep.variable_out = PRE_TARGETDEPS
 java_dep.CONFIG += no_link
