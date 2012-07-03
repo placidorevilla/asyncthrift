@@ -13,18 +13,18 @@ class TMemFile : public QIODevice
 public:
 	explicit TMemFile(QObject *parent = 0);
 	TMemFile(const QString& name, QObject *parent = 0);
-	~TMemFile();
+	virtual ~TMemFile();
 
 	QFile* file();
 
-	bool open(OpenMode openMode);
+	virtual bool open(OpenMode openMode);
 
-	void close();
-	qint64 size() const;
-//	qint64 pos() const;
-	bool seek(qint64 off);
-//	bool atEnd() const;
-	bool canReadLine() const;
+	virtual void close();
+	virtual qint64 size() const;
+//	virtual qint64 pos() const;
+	virtual bool seek(qint64 off);
+//	virtual bool atEnd() const;
+	virtual bool canReadLine() const;
 	qint64 peek(char *data, qint64 maxSize);
 	QByteArray peek(qint64 maxSize);
 
@@ -32,8 +32,8 @@ public:
 	uchar* buffer();
 
 protected:
-	qint64 readData(char *data, qint64 maxlen);
-	qint64 writeData(const char *data, qint64 len);
+	virtual qint64 readData(char *data, qint64 maxlen);
+	virtual qint64 writeData(const char *data, qint64 len);
 
 private slots:
 	void _q_emitSignals();
