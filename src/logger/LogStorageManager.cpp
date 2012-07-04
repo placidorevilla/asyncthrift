@@ -27,6 +27,7 @@ T_QLOGGER_DEFINE_ROOT(LogWriteThread);
 T_QLOGGER_DEFINE_ROOT(LogSyncThread);
 T_QLOGGER_DEFINE_ROOT(LogAllocateThread);
 T_QLOGGER_DEFINE_ROOT(LogReadThread);
+T_QLOGGER_DEFINE_ROOT(LogReadaheadThread);
 T_QLOGGER_DEFINE_OTHER_ROOT(StorageReadContext, LogReadThread);
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
@@ -324,8 +325,7 @@ StorageReadContext* LogStorage::begin_read(uint64_t transaction)
 		index = current_index;
 	}
 
-	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(index, 4, 10, QChar('0'))));
-	file->open(QIODevice::ReadWrite);
+	file = open_log_file(index);
 
 	StorageReadContext* context = new StorageReadContext(this, index, file);
 	locker.unlock();
@@ -336,7 +336,6 @@ StorageReadContext* LogStorage::begin_read(uint64_t transaction)
 TMemFile* LogStorage::advance_next_file(int* index)
 {
 	QMutexLocker locker(&file_guard);
-	TMemFile* file = 0;
 
 	if (*index == current_index)
 		return 0;
@@ -344,10 +343,17 @@ TMemFile* LogStorage::advance_next_file(int* index)
 	TDEBUG("advance_next_file");
 
 	auto log_index = file_to_transaction_map.find(*index) + 1;
-
-	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(log_index.key(), 4, 10, QChar('0'))));
-	file->open(QIODevice::ReadWrite);
 	*index = log_index.key();
+
+	return open_log_file(*index);
+}
+
+TMemFile* LogStorage::open_log_file(int index)
+{
+	TMemFile* file;
+	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(index, 4, 10, QChar('0'))));
+	file->open(QIODevice::ReadWrite);
+	new LogReadaheadThread(dup(file->file()->handle()), manager);
 	return file;
 }
 
@@ -519,10 +525,6 @@ void LogStorage::write(void* buffer, size_t size)
 //	TDEBUG("Log transaction %lu", transaction);
 }
 
-LogAllocateThread::LogAllocateThread(const QString& dir, size_t size) : dir(dir), size(size)
-{
-}
-
 void LogAllocateThread::run()
 {
 	QDir storage_dir(dir);
@@ -541,10 +543,6 @@ LogSyncThread::LogSyncThread(LogStorage* storage) : storage(storage)
 	moveToThread(this);
 }
 
-LogSyncThread::~LogSyncThread()
-{
-}
-
 void LogSyncThread::sync()
 {
 	storage->sync();
@@ -554,10 +552,6 @@ LogWriteThread::LogWriteThread(LogStorage* storage) : quitNow(false), buffer(Asy
 {
 	start();
 	moveToThread(this);
-}
-
-LogWriteThread::~LogWriteThread()
-{
 }
 
 void LogWriteThread::run()
@@ -662,5 +656,14 @@ void LogReadThread::handle_bytes_written(qint64 bytes)
 {
 	Q_UNUSED(bytes);
 	write_transactions();
+}
+
+void LogReadaheadThread::run()
+{
+	TDEBUG("Starting readahead");
+	int r;
+	if ((r = posix_fadvise(fd, 0, 0, POSIX_FADV_WILLNEED)) != 0)
+		TWARN("Could not perform readahead: %s", strerror(r));
+	TDEBUG("Finished readahead");
 }
 

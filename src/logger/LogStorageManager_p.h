@@ -25,7 +25,6 @@ class LogWriteThread : public QThread {
 
 public:
 	explicit LogWriteThread(LogStorage* storage);
-	~LogWriteThread();
 
 public slots:
 	void quit();
@@ -46,7 +45,6 @@ class LogSyncThread : public QThread {
 
 public:
 	explicit LogSyncThread(LogStorage* storage);
-	~LogSyncThread();
 
 public slots:
 	void sync();
@@ -61,7 +59,8 @@ class LogAllocateThread : public QThread {
 	T_LOGGER_DECLARE(LogAllocateThread);
 
 public:
-	LogAllocateThread(const QString& dir, size_t size);
+	LogAllocateThread(const QString& dir, size_t size) : dir(dir), size(size)
+	{}
 
 protected:
 	virtual void run();
@@ -93,6 +92,33 @@ private:
 	QDataStream stream;
 	uint64_t transaction;
 	LogReadContext *read_context;
+};
+
+class LogReadaheadThread : public QThread {
+	Q_OBJECT
+	Q_DISABLE_COPY(LogReadaheadThread)
+	T_LOGGER_DECLARE(LogReadaheadThread);
+
+public:
+	explicit LogReadaheadThread(int fd, QObject* parent = 0) : QThread(), fd(fd)
+	{
+		if (parent) {
+			moveToThread(parent->thread());
+			setParent(parent);
+		}
+		start();
+	}
+
+	~LogReadaheadThread()
+	{
+		deleteLater();
+	}
+
+protected:
+	virtual void run();
+
+private:
+	int fd;
 };
 
 class LogReadContext {
@@ -144,6 +170,7 @@ private:
 	void map_log_file(int log_index, bool only_start = false);
 	void get_next_file();
 	void write(void* buffer, size_t size);
+	TMemFile* open_log_file(int index);
 
 private slots:
 	void sync();
