@@ -9,3 +9,4 @@
 # Additional options that are passed to the Daemon.
 ASYNCTHRIFT_CONFIG_DIR="/etc/asyncthrift"
 ASYNCTHRIFT_USER="asyncthrift"
+ASYNCHBASE_OPTS="-server -Xmn64m -XX:ParallelGCThreads=4 -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -Xmx512m -Xms512m"
