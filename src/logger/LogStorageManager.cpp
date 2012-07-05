@@ -31,8 +31,6 @@ T_QLOGGER_DEFINE_ROOT(LogReadaheadThread);
 T_QLOGGER_DEFINE_OTHER_ROOT(StorageReadContext, LogReadThread);
 
 static const int RINGBUFFER_READ_TIMEOUT = 500;
-// TODO: this should be config
-static const char* LOGGER_SOCKET_NAME = "logger";
 static const int MAX_CLIENT_BUFFER = 1 * 1024 * 1024;
 static const int MAX_TRANSACTIONS_SENT_PER_LOOP = 32;
 
@@ -44,14 +42,14 @@ LogStorageManager::~LogStorageManager()
 {
 }
 
-bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_period, const QStringList& dirs)
+bool LogStorageManager::configure(unsigned int max_log_size, unsigned int sync_period, const QStringList& dirs, const QString& socket)
 {
 	TDEBUG("Configuring storages");
 
 	d->set_max_log_size(max_log_size);
 	d->create_storages(dirs);
 	d->set_sync_period(sync_period);
-	d->listen();
+	d->listen(socket);
 
 	return true;
 }
@@ -103,17 +101,18 @@ void LogStorageManagerPrivate::create_storages(const QStringList& dirs)
 	}
 }
 
-void LogStorageManagerPrivate::listen()
+void LogStorageManagerPrivate::listen(const QString& socket)
 {
 	if (!logger_server.isListening()) {
-		QDir server_dir(PKGSTATEDIR);
-
-		if (server_dir.exists(LOGGER_SOCKET_NAME))
-			server_dir.remove(LOGGER_SOCKET_NAME);
+		if (QFile::exists(socket))
+			QFile::remove(socket);
 
 		connect(&logger_server, SIGNAL(newConnection()), SLOT(new_logger_connection()));
 
-		logger_server.listen(server_dir.absoluteFilePath(LOGGER_SOCKET_NAME));
+		logger_server.listen(socket);
+	} else {
+		if (socket != logger_server.serverName())
+			TWARN("Cannot reconfigure forwarder socket while running");
 	}
 }
 

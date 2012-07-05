@@ -13,7 +13,7 @@ class ForwarderManager : public QObject {
 	T_LOGGER_DECLARE(ForwarderManager);
 
 public:
-	ForwarderManager(const QString& name, const QString& zquorum, unsigned int delay, QObject* parent = 0);
+	ForwarderManager(const QString& name, const QString& zquorum, unsigned int delay, unsigned int flush_interval, const QString& socket, QObject* parent = 0);
 	~ForwarderManager();
 
 private:

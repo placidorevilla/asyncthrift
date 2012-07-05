@@ -23,7 +23,7 @@ public:
 	void set_num_worker_threads(size_t num_worker_threads);
 	void set_buffer_size(size_t buffer_size);
 
-	void configure_log_storage(unsigned int max_size, unsigned int period, const QStringList& log_dirs);
+	void configure_log_storage(unsigned int max_size, unsigned int period, const QStringList& log_dirs, const QString& socket);
 
 	NBRingByteBuffer* buffer();
 

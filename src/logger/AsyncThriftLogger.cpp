@@ -109,9 +109,13 @@ bool AsyncThriftLogger::reloadConfig()
 
 	QSettings settings(config_dir.absoluteFilePath(ASYNCTHRIFT_CONFIG_FILE), QSettings::IniFormat);
 
+	QString socket(settings.value("ForwarderSocket", QString(PKGSTATEDIR "/logger")).toString());
+
+	settings.beginGroup("ThriftServer");
 	dispatcher()->set_port(settings.value("Port", 9090).toUInt());
 	dispatcher()->set_num_worker_threads(settings.value("ThriftThreads", 4).toUInt());
 	dispatcher()->set_buffer_size(settings.value("BufferSize", 64).toUInt());
+	settings.endGroup();
 
 	settings.beginGroup("LogStorage");
 	QList<QString> log_dirs;
@@ -123,7 +127,8 @@ bool AsyncThriftLogger::reloadConfig()
 	}
 	settings.endArray();
 
-	dispatcher()->configure_log_storage(settings.value("MaxLogSize", 64).toUInt(), settings.value("SyncPeriod", 1000).toUInt(), log_dirs);
+	dispatcher()->configure_log_storage(settings.value("MaxLogSize", 64).toUInt(), settings.value("SyncPeriod", 1000).toUInt(), log_dirs, socket);
+	settings.endGroup();
 
 	return true;
 }

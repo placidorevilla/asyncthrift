@@ -1,4 +1,7 @@
 [General]
+ForwarderSocket=$${LOCALSTATEDIR}/lib/$${PACKAGE}/logger
+
+[ThriftServer]
 Port=9090
 ThriftThreads=4
 BufferSize=64
@@ -13,4 +16,5 @@ Paths\\size=1
 Forwarders\\1\\Name=live
 Forwarders\\1\\ZQuorum=localhost
 Forwarders\\1\\Delay=0
+Forwarders\\1\\FlushInterval=1000
 Forwarders\\size=1

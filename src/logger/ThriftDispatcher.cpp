@@ -115,9 +115,9 @@ void ThriftDispatcher::set_buffer_size(size_t buffer_size)
 	d->buffer()->resize(buffer_size * 1024 * 1024);
 }
 
-void ThriftDispatcher::configure_log_storage(unsigned int max_size, unsigned int period, const QStringList& log_dirs)
+void ThriftDispatcher::configure_log_storage(unsigned int max_size, unsigned int period, const QStringList& log_dirs, const QString& socket)
 {
-	d->_ls_manager.configure(max_size, period, log_dirs);
+	d->_ls_manager.configure(max_size, period, log_dirs, socket);
 }
 
 NBRingByteBuffer* ThriftDispatcher::buffer()

@@ -27,7 +27,7 @@ class ForwarderManagerPrivate : public QThread {
 	enum State { STATE_READ_LEN, STATE_READ_PAYLOAD, STATE_FORWARDING, STATE_STALLED, STATE_DELAYED };
 
 public:
-	ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, ForwarderManager* parent = 0);
+	ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, unsigned int flush_interval, const QString& socket_name, ForwarderManager* parent = 0);
 	~ForwarderManagerPrivate();
 
 	virtual void run();
@@ -44,8 +44,8 @@ private slots:
 
 public:
 	QString name;
-	QString zquorum;
 	unsigned int delay;
+	QString socket_name;
 
 private:
 	QLocalSocket socket;

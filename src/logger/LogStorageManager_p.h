@@ -207,7 +207,7 @@ public:
 	void set_sync_period(unsigned int sync_period);
 
 	void create_storages(const QStringList& dirs);
-	void listen();
+	void listen(const QString& socket);
 
 	uint64_t transaction(uint64_t new_transaction = 0);
 

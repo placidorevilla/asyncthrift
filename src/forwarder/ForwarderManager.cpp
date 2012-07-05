@@ -17,21 +17,19 @@ T_QLOGGER_DEFINE_ROOT(BatchRequests);
 static uint64_t TX_DONE_MASK = 1ULL << 63;
 static uint64_t TX_FLYING_MASK = ~(1ULL << 63);
 
-// TODO: this should be config
-static const char* LOGGER_SOCKET_NAME = "logger";
 static int RECONNECT_TIME = 1000;
 static int MAX_FLYING_TX = 4096;
 static quint64 MAX_SOCKET_BUFFER_SIZE = 4 * 1024 * 1024;
 
-ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, ForwarderManager* parent) : QThread(), name(name), zquorum(zquorum), delay(delay), stream(&socket), state(STATE_READ_LEN), len(0), flying_txs(MAX_FLYING_TX), hbase_client(new HBaseClient(zquorum.toAscii(), "/hbase")), q_ptr(parent)
+ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, unsigned int flush_interval, const QString& socket_name, ForwarderManager* parent) : QThread(), name(name), delay(delay), socket_name(socket_name), stream(&socket), state(STATE_READ_LEN), len(0), flying_txs(MAX_FLYING_TX), hbase_client(new HBaseClient(zquorum.toAscii(), "/hbase")), q_ptr(parent)
 {
 	QDir state_dir(PKGSTATEDIR);
 
-	// TODO: configure the HBaseClient object
-	// setFlushInterval
+	hbase_client->setFlushInterval(flush_interval);
 	moveToThread(this);
 	socket.moveToThread(this);
 	socket.setReadBufferSize(MAX_SOCKET_BUFFER_SIZE);
+	// TODO: this path should be config
 	tx_ptr_file.setFileName(state_dir.absoluteFilePath(QString("forwarder_%1.ptr").arg(name)));
 	tx_ptr_file.open(QIODevice::ReadWrite);
 	tx_ptr_stream.setDevice(&tx_ptr_file);
@@ -56,8 +54,7 @@ void ForwarderManagerPrivate::run()
 
 void ForwarderManagerPrivate::reconnect()
 {
-	QDir server_dir(PKGSTATEDIR);
-	socket.connectToServer(server_dir.absoluteFilePath(LOGGER_SOCKET_NAME));
+	socket.connectToServer(socket_name);
 }
 
 void ForwarderManagerPrivate::handle_connected()
@@ -168,7 +165,7 @@ void ForwarderManagerPrivate::handle_finished()
 		tx_ptr_file.flush();
 		tx_ptr_stream.device()->seek(0);
 		stream.writeRawData((char *)&transaction, sizeof(transaction));
-		TDEBUG("Sync transaction %llu", transaction);
+		TDEBUG("Sync transaction %lu", transaction);
 
 		if (state == STATE_STALLED) {
 			connect(&socket, SIGNAL(readyRead()), SLOT(handle_ready_read()));
@@ -185,7 +182,7 @@ void ForwarderManagerPrivate::handle_end_delay()
 	handle_ready_read();
 }
 
-ForwarderManager::ForwarderManager(const QString& name, const QString& zquorum, unsigned int delay, QObject* parent) : QObject(parent), d_ptr(new ForwarderManagerPrivate(name, zquorum, delay))
+ForwarderManager::ForwarderManager(const QString& name, const QString& zquorum, unsigned int delay, unsigned int flush_interval, const QString& socket, QObject* parent) : QObject(parent), d_ptr(new ForwarderManagerPrivate(name, zquorum, delay, flush_interval, socket))
 {
 }
 

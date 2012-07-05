@@ -9,14 +9,14 @@
 
 #include <signal.h>
 
+#include "config.h"
+
 const char* LOG4CXX_CONFIG_FILE = "log4cxx.xml";
 const char* ASYNCTHRIFT_CONFIG_FILE = "asyncthrift.ini";
 
-// TODO: daemonization and stuff
-
 T_QLOGGER_DEFINE_ROOT(AsyncThriftForwarder);
 
-AsyncThriftForwarder::AsyncThriftForwarder(int& argc, char** argv) : TApplication(argc, argv), config_dir(QDir("/etc/asyncthrift"))
+AsyncThriftForwarder::AsyncThriftForwarder(int& argc, char** argv) : TApplication(argc, argv), config_dir(QDir(PKGSYSCONFDIR))
 {
 }
 
@@ -106,12 +106,14 @@ bool AsyncThriftForwarder::reloadConfig()
 
 	QSettings settings(config_dir.absoluteFilePath(ASYNCTHRIFT_CONFIG_FILE), QSettings::IniFormat);
 
-	// TODO: Check reconfiguration
+	QString socket(settings.value("ForwarderSocket", QString(PKGSTATEDIR "/logger")).toString());
+
+	// TODO: Check reconfiguration. We could reconfigure delay and flush_interval
 	settings.beginGroup("LogForwarder");
 	int nentries = settings.beginReadArray("Forwarders");
 	for (int i = 0; i < nentries; i++) {
 		settings.setArrayIndex(i);
-		forwarders.append(new ForwarderManager(settings.value("Name").toString(), settings.value("ZQuorum").toString(), settings.value("Delay").toUInt()));
+		forwarders.append(new ForwarderManager(settings.value("Name").toString(), settings.value("ZQuorum").toString(), settings.value("Delay").toUInt(), settings.value("FlushInterval").toUInt(), socket));
 	}
 	settings.endArray();
 
