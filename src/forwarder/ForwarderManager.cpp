@@ -40,7 +40,6 @@ ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QStr
 
 ForwarderManagerPrivate::~ForwarderManagerPrivate()
 {
-	// TODO: hbase_client.shutdown
 }
 
 void ForwarderManagerPrivate::run()
@@ -182,12 +181,35 @@ void ForwarderManagerPrivate::handle_end_delay()
 	handle_ready_read();
 }
 
+void ForwarderManagerPrivate::finish()
+{
+	disconnect(&socket);
+	socket.disconnectFromServer();
+	QFutureWatcher<void>* watcher = new QFutureWatcher<void>;
+	connect(watcher, SIGNAL(finished()), this, SLOT(handle_finished_client()));
+	disconnect(&socket, SIGNAL(readyRead()), this, SLOT(handle_ready_read()));
+	watcher->setFuture(hbase_client->shutdown());
+}
+
+void ForwarderManagerPrivate::handle_finished_client()
+{
+	delete sender();
+	quit();
+}
+
 ForwarderManager::ForwarderManager(const QString& name, const QString& zquorum, unsigned int delay, unsigned int flush_interval, const QString& socket, QObject* parent) : QObject(parent), d_ptr(new ForwarderManagerPrivate(name, zquorum, delay, flush_interval, socket))
 {
 }
 
 ForwarderManager::~ForwarderManager()
 {
+	delete d_ptr;
+}
+
+void ForwarderManager::finish()
+{
+	QMetaObject::invokeMethod(d_ptr, "finish", Qt::QueuedConnection);
+	d_ptr->wait();
 }
 
 bool BatchRequests::send(HBaseClient* client)

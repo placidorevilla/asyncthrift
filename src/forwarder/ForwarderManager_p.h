@@ -31,8 +31,10 @@ public:
 	~ForwarderManagerPrivate();
 
 	virtual void run();
+	Q_INVOKABLE void finish();
 
 private slots:
+	void handle_finished_client();
 	void handle_connected();
 	void handle_error(QLocalSocket::LocalSocketError socket_error);
 	void handle_ready_read();

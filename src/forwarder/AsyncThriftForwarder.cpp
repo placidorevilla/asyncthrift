@@ -80,10 +80,17 @@ int AsyncThriftForwarder::run()
 	return res;
 }
 
+void AsyncThriftForwarder::finish()
+{
+	foreach(ForwarderManager* forwarder, forwarders)
+		forwarder->finish();
+	quit();
+}
+
 void AsyncThriftForwarder::signal_received(int signo)
 {
 	if (signo == SIGTERM || signo == SIGINT)
-		quit();
+		finish();
 	else if (signo == SIGHUP)
 		reloadConfig();
 }

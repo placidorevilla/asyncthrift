@@ -16,6 +16,8 @@ public:
 	ForwarderManager(const QString& name, const QString& zquorum, unsigned int delay, unsigned int flush_interval, const QString& socket, QObject* parent = 0);
 	~ForwarderManager();
 
+	void finish();
+
 private:
 	Q_DECLARE_PRIVATE(ForwarderManager);
 	ForwarderManagerPrivate* d_ptr;

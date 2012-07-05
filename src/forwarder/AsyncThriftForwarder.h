@@ -27,7 +27,9 @@ protected:
 
 	virtual void signal_received(int signo);
 
+private:
 	bool reloadConfig();
+	void finish();
 
 private:
 	QDir config_dir;
