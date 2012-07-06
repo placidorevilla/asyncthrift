@@ -84,7 +84,10 @@ void ForwarderManagerPrivate::handle_error(QLocalSocket::LocalSocketError socket
 void ForwarderManagerPrivate::handle_ready_read()
 {
 	BatchRequests* batch = 0;
-	uint32_t now = time(NULL);
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	// This is the current time in tenths of a second
+	uint32_t now = (uint32_t) (ts.tv_sec * 10 + ts.tv_nsec / 100000000);
 
 	while (true) {
 		if (state == STATE_READ_LEN) {
@@ -109,9 +112,10 @@ void ForwarderManagerPrivate::handle_ready_read()
 			stream.readRawData(batch->buffer(), len);
 			connect(batch, SIGNAL(finished()), SLOT(handle_finished()));
 			flying_txs.push_back(batch->transaction() & TX_FLYING_MASK);
-			if (now - batch->timestamp() / 10 < delay) {
+			if ((now - batch->timestamp()) < (delay * 10)) {
+				TDEBUG("Delaying %d seconds...", (delay * 10 - now + batch->timestamp()) / 10);
 				delayed_batch = batch;
-				QTimer::singleShot((now - batch->timestamp() / 10) * 1000, this, SLOT(handle_end_delay()));
+				QTimer::singleShot((delay * 10 - now + batch->timestamp()) * 100, this, SLOT(handle_end_delay()));
 				disconnect(&socket, SIGNAL(readyRead()), this, SLOT(handle_ready_read()));
 				state = STATE_DELAYED;
 				return;
