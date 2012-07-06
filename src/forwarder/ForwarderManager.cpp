@@ -33,8 +33,7 @@ ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QStr
 	tx_ptr_file.setFileName(state_dir.absoluteFilePath(QString("forwarder_%1.ptr").arg(name)));
 	tx_ptr_file.open(QIODevice::ReadWrite);
 	tx_ptr_stream.setDevice(&tx_ptr_file);
-	tx_ptr_stream.setVersion(QDataStream::Qt_4_6);
-	tx_ptr_stream.setByteOrder(QDataStream::LittleEndian);
+	tx_ptr_stream.setIntegerBase(10);
 	start();
 }
 
@@ -60,15 +59,16 @@ void ForwarderManagerPrivate::handle_connected()
 {
 	quint64 transaction;
 	
-	tx_ptr_stream.device()->seek(0);
+	tx_ptr_stream.seek(0);
 	tx_ptr_stream >> transaction;
-	tx_ptr_stream.device()->seek(0);
-	if (tx_ptr_stream.status() != QDataStream::Ok) {
+	tx_ptr_stream.seek(0);
+	if (tx_ptr_stream.status() != QTextStream::Ok) {
 		transaction = 1;
 		tx_ptr_stream.resetStatus();
 		tx_ptr_stream << transaction;
-		tx_ptr_file.flush();
-		tx_ptr_stream.device()->seek(0);
+		tx_ptr_stream.flush();
+		tx_ptr_file.resize(tx_ptr_stream.pos());
+		tx_ptr_stream.seek(0);
 	}
 	stream.resetStatus();
 	stream.writeRawData((char *)&transaction, sizeof(transaction));
@@ -150,7 +150,6 @@ void ForwarderManagerPrivate::handle_finished()
 	BatchRequests* batch = qobject_cast<BatchRequests*>(sender());
 
 	uint64_t transaction = batch->transaction() & TX_FLYING_MASK;
-//	TDEBUG("finished transaction %llu", transaction);
 
 	int tx_idx = flying_txs.indexOf(transaction);
 	flying_txs[tx_idx] = transaction | TX_DONE_MASK;
@@ -165,8 +164,9 @@ void ForwarderManagerPrivate::handle_finished()
 		}
 		flying_txs.erase(flying_txs.begin(), i);
 		tx_ptr_stream << (quint64) transaction;
-		tx_ptr_file.flush();
-		tx_ptr_stream.device()->seek(0);
+		tx_ptr_stream.flush();
+		tx_ptr_file.resize(tx_ptr_stream.pos());
+		tx_ptr_stream.seek(0);
 		stream.writeRawData((char *)&transaction, sizeof(transaction));
 		TDEBUG("Sync transaction %lu", transaction);
 
@@ -232,7 +232,6 @@ bool BatchRequests::send(HBaseClient* client)
 				connect(pending, SIGNAL(finished()), this, SLOT(handle_finished()));
 
 				try {
-//					TDEBUG("send %p", pending);
 					pending->setFuture(client->put(*pr));
 					pending_requests.insert(pending);
 				} catch (JavaException& e) {
@@ -251,11 +250,14 @@ void BatchRequests::handle_finished()
 	PendingRequest* pending = qobject_cast<PendingRequest*>(sender());
 
 	try {
-//		TDEBUG("finished %p", pending);
 		pending->waitForFinished();
-	// TODO: check the different kinds of exceptions
+	// TODO: determine what to do in each of these cases, for now, just ignore it and keep on going
+	} catch (RecoverableException& e) {
+		TWARN("RECOVERABLE EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
+	} catch (NonRecoverableException& e) {
+		TWARN("NONRECOVERABLE EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
 	} catch (HBaseException& e) {
-		TWARN("EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
+		TWARN("UNKNOWN EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
 	}
 
 	delete pending->request();

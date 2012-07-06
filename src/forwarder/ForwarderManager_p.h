@@ -11,6 +11,7 @@
 #include <QThread>
 #include <QLocalSocket>
 #include <QDataStream>
+#include <QTextStream>
 #include <QFile>
 #include <QFutureWatcher>
 #include <QSet>
@@ -56,7 +57,7 @@ private:
 	State state;
 	quint32 len;
 
-	QDataStream tx_ptr_stream;
+	QTextStream tx_ptr_stream;
 	QFile tx_ptr_file;
 
 	QCircularBuffer<uint64_t> flying_txs;
