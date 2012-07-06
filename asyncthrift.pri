@@ -12,14 +12,19 @@ profile {
 	PROFILE_LFLAGS = -pg
 }
 
-QMAKE_CXXFLAGS += -std=gnu++0x -rdynamic $$OPTIMIZE_FLAGS $$PROFILE_CFLAGS
-QMAKE_CFLAGS += $$OPTIMIZE_FLAGS $$PROFILE_CFLAGS
+QMAKE_CXXFLAGS += -I$$TOP_BUILDDIR -I$$TOP_SRCDIR -std=gnu++0x -rdynamic $$OPTIMIZE_FLAGS $$PROFILE_CFLAGS
+QMAKE_CFLAGS += -I$$TOP_BUILDDIR -I$$TOP_SRCDIR $$OPTIMIZE_FLAGS $$PROFILE_CFLAGS
 QMAKE_LFLAGS += $$PROFILE_LFLAGS
 # To avoid some warnings on thrift generated code
 QMAKE_CXXFLAGS_WARN_ON += -Wno-return-type
 
 ARCH = amd64
-JAVA_HOME = ${JAVA_HOME}
+JAVA_HOME = $$(JAVA_HOME)
+isEmpty(JAVA_HOME) {
+	JAVA_HOME = $$system(readlink -m `which javac`)
+	JAVA_HOME = $$dirname(JAVA_HOME)
+	JAVA_HOME = $$dirname(JAVA_HOME)
+}
 JAVAC = $$JAVA_HOME/bin/javac
 
 PKGCONFIG += libdaemon liblog4cxx
