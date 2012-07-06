@@ -7,6 +7,7 @@
 #include <QFuture>
 
 namespace AsyncHBase {
+// TODO: update API to asynchbase 1.3.1
 
 #define DECLARE_HAS_PROPERTY(type, name, prop) \
 	class Has##name { \

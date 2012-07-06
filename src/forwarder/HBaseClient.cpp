@@ -175,6 +175,10 @@ jobject Deferred::call(jobject arg)
 			this->reportException(UnknownRowLockException(utfMessage));
 		} else if (strcmp(utfName, "org.hbase.async.VersionMismatchException") == 0) {
 			this->reportException(VersionMismatchException(utfMessage));
+		} else if (strcmp(utfName, "org.hbase.async.RecoverableException") == 0) {
+			this->reportException(RecoverableException(utfMessage));
+		} else if (strcmp(utfName, "org.hbase.async.NonRecoverableException") == 0) {
+			this->reportException(NonRecoverableException(utfMessage));
 		} else {
 			this->reportException(HBaseException(utfMessage));
 		}
