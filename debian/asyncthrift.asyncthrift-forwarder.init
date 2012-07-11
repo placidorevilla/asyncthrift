@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 ### BEGIN INIT INFO
 # Provides:          asyncthrift
 # Required-Start:    $network $local_fs $remote_fs
@@ -35,7 +35,13 @@ SCRIPTNAME=/etc/init.d/$NAME
 # Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
 . /lib/lsb/init-functions
 
+export JAVA_HOME=${JAVA_HOME:-`update-java-alternatives -l java-6-sun | cut -d' ' -f3`}
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$JAVA_HOME/jre/lib/amd64/server"
 export LIBJVM_OPTS="-Dlog4j.configuration=file:$ASYNCTHRIFT_CONFIG_DIR/log4j.xml $ASYNCHBASE_OPTS"
+for jar in /usr/share/asyncthrift-0.1.0/java/*.jar; do
+	CLASSPATH="$CLASSPATH:$jar"
+done
+export CLASSPATH
 DAEMON_ARGS="$DAEMON_ARGS -c $ASYNCTHRIFT_CONFIG_DIR -u $ASYNCTHRIFT_USER"
 
 #
