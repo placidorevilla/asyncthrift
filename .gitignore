@@ -1,3 +1,11 @@
 build
 Makefile
 .qmake.cache
+conf
+target
+config.h
+*.prl
+*.o
+*.a
+*.class
+moc_*
