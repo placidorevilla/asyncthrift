@@ -92,6 +92,7 @@ private:
 	QDataStream stream;
 	uint64_t transaction;
 	LogReadContext *read_context;
+	QTimer retry;
 };
 
 class LogReadaheadThread : public QThread {

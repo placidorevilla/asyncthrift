@@ -605,7 +605,10 @@ void LogReadThread::run()
 	connect(socket, SIGNAL(disconnected()), SLOT(quit()));
 	connect(socket, SIGNAL(readyRead()), SLOT(handle_ready_read()));
 	connect(socket, SIGNAL(bytesWritten(qint64)), SLOT(handle_bytes_written(qint64)));
+	connect(&retry, SIGNAL(timeout()), SLOT(write_transactions()));
 
+	retry.setInterval(100);
+	retry.start();
 	exec();
 
 	socket->close();
@@ -620,11 +623,14 @@ void LogReadThread::write_transactions()
 	size_t size;
 	int max_to_write = MAX_TRANSACTIONS_SENT_PER_LOOP;
 
+	if (transaction == 0)
+		return;
+
 	while (max_to_write-- && stream.device()->bytesToWrite() < MAX_CLIENT_BUFFER) {
 		if (!manager->read_next_transaction(read_context, &buffer, &size)) {
 			// If there are no available transactions, retry in a while
 			// TODO: do something nicer to keep reading
-			QTimer::singleShot(100, this, SLOT(write_transactions()));
+//			QTimer::singleShot(100, this, SLOT(write_transactions()));
 			break;
 		}
 		stream.writeBytes(buffer, size);
