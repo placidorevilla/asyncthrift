@@ -8,9 +8,15 @@ JAVA_CLASSPATH = $$TOP_BUILDDIR/target/$$PKGDATADIR/java/\'*\'
 JAVA_SOURCES = com/tuenti/async/GenericCallback.java
 JAVA_TARGET = $$TOP_BUILDDIR/target/$$PKGDATADIR/java/suasync-generic-callback.jar
 
+defineReplace(javaOutputFile) {
+	name = $$system(readlink -m $${OUT_PWD}/$$join(1))
+	name = $$replace(name, ".java$", ".class")
+	return("$$replace(name, $${IN_PWD}/, '')")
+}
+
 java.input = JAVA_SOURCES
-java.output = ${QMAKE_FILE_IN_PATH}/${QMAKE_FILE_IN_BASE}.class
-java.commands = $$JAVAC -cp $$JAVA_CLASSPATH ${QMAKE_FILE_IN} || (rm ${QMAKE_FILE_OUT} && false)
+java.output_function = javaOutputFile
+java.commands = $$JAVAC -cp $$JAVA_CLASSPATH -d . ${QMAKE_FILE_IN} || (rm ${QMAKE_FILE_OUT} && false)
 silent:java.commands = @echo compiling ${QMAKE_FILE_OUT_BASE}.class && $$java.commands
 java.variable_out = JAR_INPUT
 java.CONFIG += no_link
