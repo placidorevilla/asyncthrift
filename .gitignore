@@ -1,7 +1,6 @@
 build
 Makefile
 .qmake.cache
-conf
 target
 config.h
 *.prl
@@ -9,3 +8,10 @@ config.h
 *.a
 *.class
 moc_*
+debian/asyncthrift.debhelper.log
+debian/asyncthrift.substvars
+debian/asyncthrift/
+debian/files
+conf/asyncthrift.ini
+conf/log4cxx.xml
+conf/log4j.xml
