@@ -193,7 +193,7 @@ void LogStorageManagerPrivate::end_read(LogReadContext* context)
 	delete context;
 }
 
-bool LogStorageManagerPrivate::read_next_transaction(LogReadContext* context, char** buffer, size_t* size)
+uint64_t LogStorageManagerPrivate::read_next_transaction(LogReadContext* context, char** buffer, size_t* size)
 {
 	return context->read_next_transaction(buffer, size);
 }
@@ -208,23 +208,23 @@ LogReadContext::~LogReadContext()
 		delete context;
 }
 
-bool LogReadContext::read_next_transaction(char** buffer, size_t* size)
+uint64_t LogReadContext::read_next_transaction(char** buffer, size_t* size)
 {
 	uint64_t transaction = UINT64_MAX;
 	StorageReadContext* context_to_advance = 0;
-	bool any_valid = false;
 	
 	foreach (StorageReadContext* context, storage_contexts) {
-		if (!context->peek_next_transaction(buffer, size)) {
+		uint64_t next_transaction = context->peek_next_transaction(buffer, size);
+		if (!next_transaction) {
 			if (!context->advance())
 				continue;
-			if (!context->peek_next_transaction(buffer, size))
+			next_transaction = context->peek_next_transaction(buffer, size);
+			if (!next_transaction)
 				continue;
 		}
-		if (**(uint64_t**)buffer < transaction) {
-			transaction = LOG_ENDIAN(**(uint64_t**)buffer);
+		if (next_transaction < transaction) {
+			transaction = next_transaction;
 			context_to_advance = context;
-			any_valid = true;
 		}
 	}
 
@@ -232,7 +232,7 @@ bool LogReadContext::read_next_transaction(char** buffer, size_t* size)
 
 	if (context_to_advance)
 		context_to_advance->advance();
-	return any_valid;
+	return transaction == UINT64_MAX ? 0 : transaction;
 }
 
 StorageReadContext::StorageReadContext(LogStorage* storage, int index, TMemFile* file) : storage(storage), index(index), file(file)
@@ -244,14 +244,15 @@ StorageReadContext::~StorageReadContext()
 	delete file;
 }
 
-bool StorageReadContext::peek_next_transaction(char** buffer, size_t* size)
+uint64_t StorageReadContext::peek_next_transaction(char** buffer, size_t* size)
 {
 	char* buf = (char*)file->buffer();
-	if (LOG_ENDIAN(*(uint64_t *)(buf + file->pos())) == 0)
-		return false;
-	*buffer = buf + file->pos();
-	*size = (LOG_ENDIAN(*((*(uint64_t**)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
-	return true;
+	uint64_t next_transaction = LOG_ENDIAN(*(uint64_t *)(buf + file->pos()));
+	if (next_transaction != 0) {
+		*buffer = buf + file->pos();
+		*size = (LOG_ENDIAN(*((*(uint64_t**)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
+	}
+	return next_transaction;
 }
 
 bool StorageReadContext::advance(uint64_t transaction)
@@ -627,13 +628,15 @@ void LogReadThread::write_transactions()
 		return;
 
 	while (max_to_write-- && stream.device()->bytesToWrite() < MAX_CLIENT_BUFFER) {
-		if (!manager->read_next_transaction(read_context, &buffer, &size)) {
+		uint64_t next_transaction = manager->read_next_transaction(read_context, &buffer, &size);
+		if (next_transaction) {
+			stream.writeBytes(buffer, size);
+			transaction = next_transaction;
+		} else {
 			// If there are no available transactions, retry in a while
 			// TODO: do something nicer to keep reading
-//			QTimer::singleShot(100, this, SLOT(write_transactions()));
 			break;
 		}
-		stream.writeBytes(buffer, size);
 	}
 }
 

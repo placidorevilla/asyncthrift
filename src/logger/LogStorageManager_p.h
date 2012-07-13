@@ -127,7 +127,7 @@ public:
 	LogReadContext(LogStorageManagerPrivate* manager, const QList<StorageReadContext*>& storage_contexts);
 	~LogReadContext();
 
-	bool read_next_transaction(char** buffer, size_t* size);
+	uint64_t read_next_transaction(char** buffer, size_t* size);
 
 private:
 	LogStorageManagerPrivate* manager;
@@ -141,7 +141,7 @@ public:
 	StorageReadContext(LogStorage* storage, int index, TMemFile* file);
 	~StorageReadContext();
 
-	bool peek_next_transaction(char** buffer, size_t* size);
+	uint64_t peek_next_transaction(char** buffer, size_t* size);
 	bool advance(uint64_t transaction = 0);
 
 private:
@@ -214,7 +214,7 @@ public:
 
 	LogReadContext* begin_read(uint64_t transaction);
 	void end_read(LogReadContext* context);
-	bool read_next_transaction(LogReadContext* context, char** buffer, size_t* size);
+	uint64_t read_next_transaction(LogReadContext* context, char** buffer, size_t* size);
 
 private slots:
 	void sync_timeout();
