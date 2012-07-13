@@ -497,7 +497,7 @@ void LogStorage::write(void* buffer, size_t size)
 
 	rounded_size = ((size + sizeof(uint64_t) - 1) / sizeof(uint64_t)) * sizeof(uint64_t);
 
-	if (qint64(current_log.pos() + sizeof(transaction) + rounded_size + sizeof(crc)) >= current_log.size())
+	if (qint64(current_log.pos() + sizeof(transaction) + sizeof(timestamp_and_len) + rounded_size + sizeof(crc)) >= current_log.size())
 		get_next_file();
 
 	transaction = LOG_ENDIAN(manager->transaction());
@@ -630,6 +630,7 @@ void LogReadThread::write_transactions()
 	while (max_to_write-- && stream.device()->bytesToWrite() < MAX_CLIENT_BUFFER) {
 		uint64_t next_transaction = manager->read_next_transaction(read_context, &buffer, &size);
 		if (next_transaction) {
+//			TDEBUG("Sending tx: %ld, size: %ld", next_transaction, size);
 			stream.writeBytes(buffer, size);
 			transaction = next_transaction;
 		} else {

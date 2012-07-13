@@ -110,6 +110,7 @@ void ForwarderManagerPrivate::handle_ready_read()
 
 			batch = new BatchRequests(len);
 			stream.readRawData(batch->buffer(), len);
+//			TDEBUG("Received tx: %ld, len: %ld", batch->transaction(), len)
 			connect(batch, SIGNAL(finished()), SLOT(handle_finished()));
 			flying_txs.push_back(batch->transaction() & TX_FLYING_MASK);
 			if ((now - batch->timestamp()) < (delay * 10)) {
