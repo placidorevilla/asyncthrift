@@ -4,7 +4,20 @@
 #include <exception>
 #include <memory>
 
+#include <QThreadStorage>
+
 #include "JniHelper.h"
+
+class JavaEnvironment {
+public:
+	JavaEnvironment() : env(::getJNIEnv()) { }
+	~JavaEnvironment() { }
+
+	JNIEnv* environment() const { return env; }
+	
+private:
+	JNIEnv* env;
+};
 
 #define DECLARE_JAVA_CLASS_NAME \
 	public: \
@@ -23,7 +36,16 @@ public:
 	virtual ~JavaObject();
 
 	jobject getJObject() const { return object; }
-	JNIEnv* getJNIEnv() const { return ::getJNIEnv(); }
+	JNIEnv* getJNIEnv() const
+	{
+		if (!thread_environment.hasLocalData()) {
+			JavaEnvironment* env = new JavaEnvironment;
+			thread_environment.setLocalData(env);
+			return env->environment();
+		} else {
+			return thread_environment.localData()->environment();
+		}
+	}
 
 	void setJObjectLocal(jobject object);
 	void setJObject(jobject object);
@@ -35,6 +57,7 @@ protected:
 
 private:
 	mutable jobject object;
+	static QThreadStorage<JavaEnvironment*> thread_environment;
 };
 
 class JavaException : public std::exception, public JavaObject {

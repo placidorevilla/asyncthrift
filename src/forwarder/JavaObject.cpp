@@ -3,6 +3,8 @@
 
 #include "JavaObject.h"
 
+QThreadStorage<JavaEnvironment*> JavaObject::thread_environment;
+
 DEFINE_JAVA_CLASS_NAME(JavaObject, "");
 
 JavaObject::JavaObject(jobject object) : object(object)
