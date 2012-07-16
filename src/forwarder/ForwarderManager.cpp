@@ -173,7 +173,7 @@ void ForwarderManagerPrivate::handle_finished()
 
 		if (state == STATE_STALLED) {
 			connect(&socket, SIGNAL(readyRead()), SLOT(handle_ready_read()));
-			handle_ready_read();
+			QMetaObject::invokeMethod(this, "handle_ready_read", Qt::QueuedConnection);
 		}
 	}
 
