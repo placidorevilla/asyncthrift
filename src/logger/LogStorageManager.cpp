@@ -246,12 +246,12 @@ StorageReadContext::~StorageReadContext()
 
 uint64_t StorageReadContext::peek_next_transaction(char** buffer, size_t* size)
 {
-	char* buf = (char*)file->buffer();
-	uint64_t next_transaction = LOG_ENDIAN(*(uint64_t *)(buf + file->pos()));
-	if (next_transaction != 0) {
-		*buffer = buf + file->pos();
-		*size = (LOG_ENDIAN(*((*(uint64_t**)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
-	}
+	uint64_t next_transaction = 0;
+	char* buf = (char*)file->buffer() + file->pos();
+	if (((size_t)(file->size() - file->pos()) < (3 * sizeof(uint64_t))) || ((next_transaction = LOG_ENDIAN(*(uint64_t*)buf)) == 0))
+		return 0;
+	*buffer = buf;
+	*size = (LOG_ENDIAN(*((*(uint64_t**)buffer) + 1)) >> (8 * sizeof(uint32_t))) + 3 * sizeof(uint64_t);  // 3 * uint64_t : txid, timestamp_len, crc
 	return next_transaction;
 }
 
