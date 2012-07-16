@@ -351,7 +351,7 @@ TMemFile* LogStorage::advance_next_file(int* index)
 TMemFile* LogStorage::open_log_file(int index)
 {
 	TMemFile* file;
-	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(index, 4, 10, QChar('0'))));
+	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(index, 10, 10, QChar('0'))));
 	file->open(QIODevice::ReadWrite);
 	new LogReadaheadThread(dup(file->file()->handle()), manager);
 	return file;
@@ -362,7 +362,7 @@ void LogStorage::map_log_file(int log_index, bool only_start)
 	if (invalid_files_map.contains(log_index))
 		return;
 
-	TMemFile log_file(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(log_index, 4, 10, QChar('0'))));
+	TMemFile log_file(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(log_index, 10, 10, QChar('0'))));
 	log_file.open(QIODevice::ReadOnly);
 	uint64_t transaction, first_good_transaction = 0, last_good_transaction = 0;
 	uint64_t timestamp_and_len;
@@ -403,8 +403,8 @@ void LogStorage::get_next_file()
 	if (current_index != -1)
 		file_to_transaction_map.insert(current_index, qMakePair(first_transaction, last_transaction));
 
-	foreach(const QString& log_filename, storage_dir.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort)) {
-		int log_index = log_filename.mid(12, 4).toInt();
+	foreach(const QString& log_filename, storage_dir.entryList(QStringList() << "asyncthrift.[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].log", QDir::Files, QDir::NoSort)) {
+		int log_index = log_filename.mid(12, 10).toInt();
 		next_log_index = qMax(next_log_index, log_index);
 		if (!file_to_transaction_map.contains(log_index) && !invalid_files_map.contains(log_index))
 			file_to_transaction_map.insert(log_index, qMakePair(0UL, 0UL));
@@ -447,9 +447,9 @@ void LogStorage::get_next_file()
 
 	if (new_file) {
 		current_log.file()->setFileName(storage_dir.absoluteFilePath("asyncthrift.next.log"));
-		current_log.file()->rename(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
+		current_log.file()->rename(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 10, 10, QChar('0'))));
 	} else {
-		current_log.file()->setFileName(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 4, 10, QChar('0'))));
+		current_log.file()->setFileName(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(next_log_index, 10, 10, QChar('0'))));
 	}
 
 	current_log.open(QIODevice::ReadWrite);
