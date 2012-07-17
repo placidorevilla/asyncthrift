@@ -7,6 +7,7 @@
 
 #include <QDir>
 #include <QTimer>
+#include <QThread>
 
 using namespace AsyncHBase;
 
@@ -21,12 +22,11 @@ static int RECONNECT_TIME = 1000;
 static int MAX_FLYING_TX = 4096;
 static quint64 MAX_SOCKET_BUFFER_SIZE = 4 * 1024 * 1024;
 
-ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, unsigned int flush_interval, const QString& socket_name, ForwarderManager* parent) : QThread(), name(name), delay(delay), socket_name(socket_name), stream(&socket), state(STATE_READ_LEN), len(0), flying_txs(MAX_FLYING_TX), hbase_client(new HBaseClient(zquorum.toAscii(), "/hbase")), q_ptr(parent)
+ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QString& zquorum, unsigned int delay, unsigned int flush_interval, const QString& socket_name, ForwarderManager* parent) : QThread(), name(name), delay(delay), socket_name(socket_name), stream(&socket), state(STATE_READ_LEN), len(0), flying_txs(MAX_FLYING_TX), hbase_client(new HBaseClient(zquorum.toAscii(), "/hbase")), next_worker(0), q_ptr(parent)
 {
 	QDir state_dir(PKGSTATEDIR);
 
 	hbase_client->setFlushInterval(flush_interval);
-	moveToThread(this);
 	socket.moveToThread(this);
 	socket.setReadBufferSize(MAX_SOCKET_BUFFER_SIZE);
 	// TODO: this path should be config
@@ -34,6 +34,14 @@ ForwarderManagerPrivate::ForwarderManagerPrivate(const QString& name, const QStr
 	tx_ptr_file.open(QIODevice::ReadWrite);
 	tx_ptr_stream.setDevice(&tx_ptr_file);
 	tx_ptr_stream.setIntegerBase(10);
+
+	for (int i = 0; i < QThread::idealThreadCount(); i++) {
+		QThread* thread = new QThread(this);
+		worker_threads.append(thread);
+		thread->start();
+	}
+
+	moveToThread(this);
 	start();
 }
 
@@ -108,10 +116,9 @@ void ForwarderManagerPrivate::handle_ready_read()
 				return;
 			}
 
-			batch = new BatchRequests(len);
+			batch = new BatchRequests(len, hbase_client);
 			stream.readRawData(batch->buffer(), len);
 //			TDEBUG("Received tx: %ld, len: %ld", batch->transaction(), len)
-			connect(batch, SIGNAL(finished()), SLOT(handle_finished()));
 			flying_txs.push_back(batch->transaction() & TX_FLYING_MASK);
 			if ((now - batch->timestamp()) < (delay * 10)) {
 				TDEBUG("Delaying %d seconds...", (delay * 10 - now + batch->timestamp()) / 10);
@@ -138,18 +145,19 @@ void ForwarderManagerPrivate::handle_ready_read()
 		}
 
 		if (state == STATE_FORWARDING) {
-			if (!batch->send(hbase_client))
-				delete batch;
+			QThread* thread = worker_threads.at(next_worker);
+			next_worker = (next_worker + 1) % worker_threads.size();
+			batch->moveToThread(thread);
+			connect(batch, SIGNAL(finished(BatchRequests*)), SLOT(handle_finished(BatchRequests*)));
+			QMetaObject::invokeMethod(batch, "send", Qt::QueuedConnection);
 
 			state = STATE_READ_LEN;
 		}
 	}
 }
 
-void ForwarderManagerPrivate::handle_finished()
+void ForwarderManagerPrivate::handle_finished(BatchRequests* batch)
 {
-	BatchRequests* batch = qobject_cast<BatchRequests*>(sender());
-
 	uint64_t transaction = batch->transaction() & TX_FLYING_MASK;
 
 	int tx_idx = flying_txs.indexOf(transaction);
@@ -177,7 +185,7 @@ void ForwarderManagerPrivate::handle_finished()
 		}
 	}
 
-	delete batch;
+	batch->deleteLater();
 }
 
 void ForwarderManagerPrivate::handle_end_delay()
@@ -217,7 +225,7 @@ void ForwarderManager::finish()
 	d_ptr->wait();
 }
 
-bool BatchRequests::send(HBaseClient* client)
+bool BatchRequests::send()
 {
 	DeserializableHBaseOperation::MutateRows mutate;
 
@@ -267,6 +275,6 @@ void BatchRequests::handle_finished()
 	pending_requests.remove(pending);
 
 	if (pending_requests.isEmpty())
-		emit finished();
+		emit finished(this);
 }
 

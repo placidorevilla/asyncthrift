@@ -41,7 +41,7 @@ private slots:
 	void handle_ready_read();
 	void reconnect();
 
-	void handle_finished();
+	void handle_finished(BatchRequests* batch);
 
 	void handle_end_delay();
 
@@ -65,6 +65,9 @@ private:
 
 	AsyncHBase::HBaseClient* hbase_client;
 
+	int next_worker;
+	QList<QThread*> worker_threads;
+
 	ForwarderManager* q_ptr;
 };
 
@@ -75,17 +78,18 @@ class BatchRequests : public QObject
 	T_LOGGER_DECLARE(BatchRequests);
 
 public:
-	BatchRequests(size_t len, QObject* parent = 0) : QObject(parent), buffer_(len) {}
-	~BatchRequests() {}
+	BatchRequests(size_t len, AsyncHBase::HBaseClient* client, QObject* parent = 0) : QObject(parent), buffer_(len), client(client) {}
+	virtual ~BatchRequests() {}
 
 	char* buffer() { return buffer_.data(); }
 	uint64_t transaction() const { return LOG_ENDIAN(*(uint64_t*) buffer_.data()); }
 	uint32_t timestamp() const { return LOG_ENDIAN(*(((uint64_t*) buffer_.data()) + 1)); }
 
-	bool send(AsyncHBase::HBaseClient* client);
+public slots:
+	bool send();
 
 signals:
-	void finished();
+	void finished(BatchRequests* batch);
 
 private slots:
 	void handle_finished();
@@ -93,6 +97,7 @@ private slots:
 private:
 	QVector<char> buffer_;
 	QSet<PendingRequest*> pending_requests;
+	AsyncHBase::HBaseClient* client;
 };
 
 class PendingRequest : public QFutureWatcher<void>
