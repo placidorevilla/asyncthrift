@@ -59,7 +59,8 @@ inline MessageFormatter::MessageFormatter(const char* format, ...)
 {
 	va_list args;
 	va_start(args, format);
-	Q_ASSERT(vasprintf(&message_, format, args) != -1);
+	if (vasprintf(&message_, format, args) == -1)
+		throw std::bad_alloc();
 	va_end(args);
 }
 
@@ -79,8 +80,9 @@ inline HierarchyNamer::HierarchyNamer(const QMetaObject* mo, const char* root) :
 {
 	calc_hierarchy_name(mo);
 	if (root) {
-		char* name;
-		Q_ASSERT(asprintf(&name, "%s.%s", root, name_) != -1);
+		char* name = 0;
+		if (asprintf(&name, "%s.%s", root, name_) == -1)
+			throw std::bad_alloc();
 		free(name_);
 		name_ = name;
 	}
@@ -94,8 +96,9 @@ inline void HierarchyNamer::calc_hierarchy_name(const QMetaObject* mo)
 	calc_hierarchy_name(mo->superClass());
 
 	if (name_) {
-		char* name;
-		Q_ASSERT(asprintf(&name, "%s.%s", name_, mo->className()) != -1);
+		char* name = 0;
+		if (asprintf(&name, "%s.%s", name_, mo->className()) == -1)
+			throw std::bad_alloc();
 		free(name_);
 		name_ = name;
 	} else {
