@@ -1,5 +1,4 @@
-CONFIG += debug warn_on link_pkgconfig nostrip link_prl
-#CONFIG += silent
+CONFIG += link_pkgconfig nostrip silent
 QT -= gui
 QT += network
 
@@ -18,29 +17,21 @@ QMAKE_LFLAGS += $$PROFILE_LFLAGS
 # To avoid some warnings on thrift generated code
 QMAKE_CXXFLAGS_WARN_ON += -Wno-return-type
 
-ARCH = amd64
+ARCH = $$(ARCH)
+isEmpty(ARCH):ARCH = $$system(dpkg --print-architecture)
 JAVA_HOME = $$(JAVA_HOME)
-isEmpty(JAVA_HOME) {
-	JAVA_HOME = $$system(readlink -m `which javac`)
-	JAVA_HOME = $$dirname(JAVA_HOME)
-	JAVA_HOME = $$dirname(JAVA_HOME)
-}
+isEmpty(JAVA_HOME):JAVA_HOME = $$system(update-java-alternatives -l java-6-sun | cut -d\' \' -f3)
 JAVAC = $$JAVA_HOME/bin/javac
 
 PKGCONFIG += libdaemon liblog4cxx
 
-DEPENDPATH += $$TOP_BUILDDIR $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/include/QCircularBuffer $$TOP_SRCDIR/src/common $$TOP_SRCDIR/src/common/gen-cpp
-INCLUDEPATH += $$TOP_BUILDDIR $$TOP_SRCDIR/include/QtArg $$TOP_SRCDIR/include/QCircularBuffer $$TOP_SRCDIR/src/common $$TOP_SRCDIR/src/common/gen-cpp
+COMMON_DEPENDENCIES = \
+	$$TOP_BUILDDIR \
+	$$TOP_BUILDDIR/src/common/gen-cpp \
+	$$TOP_SRCDIR/include/QtArg \
+	$$TOP_SRCDIR/include/QCircularBuffer \
+	$$TOP_SRCDIR/src/common
 
-ALL_BUILD_SUBSTITUTES = $$BUILD_SUBSTITUTES $$BUILD_SUBSTITUTES_NOINSTALL
-QMAKE_SUBSTITUTES += $$ALL_BUILD_SUBSTITUTES
-
-for(file, BUILD_SUBSTITUTES) {
-	dir = $$dirname(file)
-	name = $$replace(dir, "[./\\\\]", "_")
-	file = $$replace(file, "(.*)\\.in$", "\\1")
-	eval($${name}.path = $$INSTALLDIR/$$dir)
-	eval($${name}.files += $$file)
-	INSTALLS *= $$name
-}
+DEPENDPATH += $$COMMON_DEPENDENCIES
+INCLUDEPATH += $$COMMON_DEPENDENCIES
 
