@@ -192,10 +192,8 @@ jobject Deferred::call(jobject arg)
 	return arg;
 }
 
-static jbyteArray jbyteArray_from_QByteArray(const QByteArray& array)
+static jbyteArray jbyteArray_from_QByteArray(const QByteArray& array, JNIEnv* env)
 {
-	JNIEnv* env = ::getJNIEnv();
-
 	jbyteArray a = env->NewByteArray(array.size());
 	env->SetByteArrayRegion(a, 0, array.size(), (const jbyte*) array.data());
 	return a;
@@ -207,11 +205,11 @@ jobject PutRequest::getJObject() const
 {
 	JNIEnv* env = getJNIEnv();
 
-	jbyteArray table_array = jbyteArray_from_QByteArray(table());
-	jbyteArray key_array = jbyteArray_from_QByteArray(key());
-	jbyteArray family_array = jbyteArray_from_QByteArray(family());
-	jbyteArray qualifier_array = jbyteArray_from_QByteArray(qualifier());
-	jbyteArray value_array = jbyteArray_from_QByteArray(value());
+	jbyteArray table_array = jbyteArray_from_QByteArray(table(), env);
+	jbyteArray key_array = jbyteArray_from_QByteArray(key(), env);
+	jbyteArray family_array = jbyteArray_from_QByteArray(family(), env);
+	jbyteArray qualifier_array = jbyteArray_from_QByteArray(qualifier(), env);
+	jbyteArray value_array = jbyteArray_from_QByteArray(value(), env);
 
 	constructNewObject("([B[B[B[B[BJ)V", table_array, key_array, family_array, qualifier_array, value_array, timestamp());
 
