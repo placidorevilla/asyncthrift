@@ -60,6 +60,7 @@ TMemFile::TMemFile(const QString& name, QObject *parent) : QIODevice(parent), d_
 TMemFile::~TMemFile()
 {
 	close();
+	delete d_ptr;
 }
 
 QFile* TMemFile::file()

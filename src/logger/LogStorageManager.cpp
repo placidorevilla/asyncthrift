@@ -673,6 +673,7 @@ void LogReadaheadThread::run()
 	int r;
 	if ((r = posix_fadvise(fd, 0, 0, POSIX_FADV_WILLNEED)) != 0)
 		TWARN("Could not perform readahead: %s", strerror(r));
+	close(fd);
 	TDEBUG("Finished readahead");
 }
 
