@@ -1,3 +1,9 @@
+asyncthrift (0.1.0-tuenti2) unstable; urgency=low
+
+  * Fix a file descriptor leak on readahead
+
+ -- Placido Revilla <previlla@tuenti.com>  Tue, 31 Jul 2012 10:57:08 +0200
+
 asyncthrift (0.1.0-tuenti1) unstable; urgency=low
 
   * Initial Release.
