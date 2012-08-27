@@ -17,6 +17,7 @@
 
 #include <fcntl.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "config.h"
 
@@ -33,6 +34,7 @@ T_QLOGGER_DEFINE_OTHER_ROOT(StorageReadContext, LogReadThread);
 static const int RINGBUFFER_READ_TIMEOUT = 500;
 static const int MAX_CLIENT_BUFFER = 1 * 1024 * 1024;
 static const int MAX_TRANSACTIONS_SENT_PER_LOOP = 32;
+static const int FORCED_TSTAMP_UPDATE_TIMEOUT = 3600;
 
 LogStorageManager::LogStorageManager(QObject* parent) : QObject(parent), d(new LogStorageManagerPrivate(this))
 {
@@ -468,13 +470,22 @@ void LogStorage::get_next_file()
 
 void LogStorage::sync()
 {
+	static time_t last_sync = 0;
+	time_t now = time(NULL);
+
+	if (last_sync == 0)
+		last_sync = now;
+
 	__sync_synchronize();
-	if (!need_sync)
+	if (!need_sync && (now - last_sync) < FORCED_TSTAMP_UPDATE_TIMEOUT)
 		return;
 	QMutexLocker locker(&file_guard);
 	TDEBUG("Syncing storage");
 	current_log.sync();
+	if ((now - last_sync) >= FORCED_TSTAMP_UPDATE_TIMEOUT)
+		futimes(current_log.file()->handle(), NULL);
 	need_sync = false;
+	last_sync = now;
 }
 
 void LogStorage::finished_allocation()
