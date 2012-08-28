@@ -312,22 +312,25 @@ StorageReadContext* LogStorage::begin_read(uint64_t transaction)
 			index = *known_files.begin();
 		// Don't test the current file
 		known_files.removeLast();
-		for (auto log_index = known_files.end();;) {
-			if (log_index == known_files.begin())
-				break;
+		for (auto log_index = known_files.end(); log_index != known_files.begin();) {
 			log_index--;
+			if (index != -1)
+				file_to_transaction_map.remove(index);
 			if (file_to_transaction_map[*log_index].first == 0)
 				map_log_file(*log_index, true);
 			if (file_to_transaction_map.contains(*log_index) && file_to_transaction_map[*log_index].first <= transaction) {
 				index = *log_index;
-				break;
+				file = open_log_file(index);
+				if (file)
+					break;
 			}
 		}
 	} else {
 		index = current_index;
 	}
 
-	file = open_log_file(index);
+	if (!file)
+		file = open_log_file(index);
 
 	StorageReadContext* context = new StorageReadContext(this, index, file);
 	locker.unlock();
@@ -347,14 +350,25 @@ TMemFile* LogStorage::advance_next_file(int* index)
 	auto log_index = file_to_transaction_map.find(*index) + 1;
 	*index = log_index.key();
 
-	return open_log_file(*index);
+	TMemFile* file = open_log_file(*index);
+	while (!file && log_index != file_to_transaction_map.end()) {
+		log_index++;
+		file_to_transaction_map.remove(*index);
+		*index = log_index.key();
+		file = open_log_file(*index);
+	}
+	return file;
 }
 
 TMemFile* LogStorage::open_log_file(int index)
 {
 	TMemFile* file;
-	file = new TMemFile(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(index, 10, 10, QChar('0'))));
-	file->open(QIODevice::ReadWrite);
+	QString path(storage_dir.absoluteFilePath(QString("asyncthrift.%1.log").arg(index, 10, 10, QChar('0'))));
+	if (!QFile::exists(path))
+		return NULL;
+	file = new TMemFile(path);
+	if (!file->open(QIODevice::ReadOnly))
+		return NULL;
 	new LogReadaheadThread(dup(file->file()->handle()), manager);
 	return file;
 }
