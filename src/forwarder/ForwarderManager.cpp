@@ -8,12 +8,14 @@
 #include <QDir>
 #include <QTimer>
 #include <QThread>
+#include <QTimerEvent>
 
 using namespace AsyncHBase;
 
 T_QLOGGER_DEFINE_ROOT(ForwarderManager);
 T_QLOGGER_DEFINE_OTHER_ROOT(ForwarderManagerPrivate, ForwarderManager);
 T_QLOGGER_DEFINE_ROOT(BatchRequests);
+T_QLOGGER_DEFINE_ROOT(PendingRequest);
 
 static uint64_t TX_DONE_MASK = 1ULL << 63;
 static uint64_t TX_FLYING_MASK = ~(1ULL << 63);
@@ -237,11 +239,11 @@ bool BatchRequests::send()
 				PutRequest* pr = new PutRequest(mutate.table(), row.first, family.first, qv.qualifier(), qv.value(), qv.timestamp());
 				pr->set_bufferable(true);
 				pr->set_durable(true);
-				PendingRequest* pending = new PendingRequest(pr);
+				PendingRequest* pending = new PendingRequest(client, pr);
 				connect(pending, SIGNAL(finished()), this, SLOT(handle_finished()));
 
 				try {
-					pending->setFuture(client->put(*pr));
+					pending->process();
 					pending_requests.insert(pending);
 				} catch (JavaException& e) {
 					TWARN("EXCEPTION: [%s] %s", e.name(), e.what());
@@ -256,18 +258,30 @@ bool BatchRequests::send()
 
 void BatchRequests::handle_finished()
 {
+	bool failed = true;
 	PendingRequest* pending = qobject_cast<PendingRequest*>(sender());
 
 	try {
 		pending->waitForFinished();
+		failed = false;
 	// TODO: determine what to do in each of these cases, for now, just ignore it and keep on going
 	} catch (RecoverableException& e) {
 		TWARN("RECOVERABLE EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
+		if (pending->retry())
+			return;
+	} catch (PleaseThrottleException& e) {
+		TWARN("PLEASETHROTTLE EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
+		// TODO: Notify server to throttle requests
+		if (pending->retry(1000, 10))
+			return;
 	} catch (NonRecoverableException& e) {
 		TWARN("NONRECOVERABLE EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
 	} catch (HBaseException& e) {
 		TWARN("UNKNOWN EXCEPTION: [%s] %s", qPrintable(e.name()), qPrintable(e.message()));
 	}
+
+	if (failed)
+		failed_ = true;
 
 	delete pending->request();
 	delete pending;
@@ -276,5 +290,46 @@ void BatchRequests::handle_finished()
 
 	if (pending_requests.isEmpty())
 		emit finished(this);
+}
+
+void PendingRequest::process()
+{
+	QFuture<void> future;
+
+	PutRequest* put = dynamic_cast<PutRequest*>(request_);
+	if (put != NULL)
+		future = client_->put(*put);
+	else
+		TERROR("Invalid RPC to process");
+	// TODO: If this happens our client is going to hang...
+	setFuture(future);
+}
+
+bool PendingRequest::retry(int delay, int limit)
+{
+	if (tries > limit) {
+		TWARN("No more retries left, failing");
+		return false;
+	}
+
+	this->delay += delay;
+
+	if (this->delay == 0) {
+		TDEBUG("Retrying RPC");
+		process();
+	} else {
+		TDEBUG("Retrying RPC in %d ms", this->delay);
+		startTimer(this->delay);
+	}
+
+	tries++;
+
+	return true;
+}
+
+void PendingRequest::timerEvent(QTimerEvent *event)
+{
+	killTimer(event->timerId());
+	process();
 }
 

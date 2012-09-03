@@ -17,6 +17,8 @@
 #include <QSet>
 #include <QCircularBuffer>
 
+class QTimerEvent;
+
 class BatchRequests;
 class PendingRequest;
 
@@ -78,8 +80,10 @@ class BatchRequests : public QObject
 	T_LOGGER_DECLARE(BatchRequests);
 
 public:
-	BatchRequests(size_t len, AsyncHBase::HBaseClient* client, QObject* parent = 0) : QObject(parent), buffer_(len), client(client) {}
+	BatchRequests(size_t len, AsyncHBase::HBaseClient* client, QObject* parent = 0) : QObject(parent), buffer_(len), client(client), failed_(false) {}
 	virtual ~BatchRequests() {}
+
+	bool failed() const { return failed_; }
 
 	char* buffer() { return buffer_.data(); }
 	uint64_t transaction() const { return LOG_ENDIAN(*(uint64_t*) buffer_.data()); }
@@ -98,22 +102,33 @@ private:
 	QVector<char> buffer_;
 	QSet<PendingRequest*> pending_requests;
 	AsyncHBase::HBaseClient* client;
+	bool failed_;
 };
 
 class PendingRequest : public QFutureWatcher<void>
 {
 	Q_OBJECT
 	Q_DISABLE_COPY(PendingRequest)
+	T_LOGGER_DECLARE(PendingRequest);
 
 public:
-	explicit PendingRequest(AsyncHBase::HBaseRpc* request = 0) : request_(request) {}
+	explicit PendingRequest(AsyncHBase::HBaseClient* client, AsyncHBase::HBaseRpc* request = 0) : client_(client), request_(request), delay(0), tries(1) {}
 	~PendingRequest() {}
 
 	AsyncHBase::HBaseRpc* request() { return request_; }
 	void set_request(AsyncHBase::HBaseRpc* request) { request_ = request; }
 
+	void process();
+	bool retry(int delay = 0, int limit = 10);
+
+protected:
+	void timerEvent(QTimerEvent *event);
+
 private:
+	AsyncHBase::HBaseClient* client_;
 	AsyncHBase::HBaseRpc* request_;
+	int delay;
+	int tries;
 };
 
 #endif // FORWARDERMANAGER_P_H
