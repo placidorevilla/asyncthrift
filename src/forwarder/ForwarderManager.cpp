@@ -227,32 +227,52 @@ void ForwarderManager::finish()
 	d_ptr->wait();
 }
 
+bool BatchRequests::process(AsyncHBase::HBaseRpc::BatchProcessable* request)
+{
+	PendingRequest* pending = new PendingRequest(client, request);
+	connect(pending, SIGNAL(finished()), this, SLOT(handle_finished()));
+
+	try {
+		pending->process();
+		pending_requests.insert(pending);
+	} catch (JavaException& e) {
+		TWARN("EXCEPTION: [%s] %s", e.name(), e.what());
+		delete pending;
+		delete request;
+		return false;
+	}
+
+	return true;
+}
+
 bool BatchRequests::send()
 {
 	DeserializableHBaseOperation::MutateRows mutate;
 
-	// TODO: check type of request
 	mutate.deserialize(buffer() + sizeof(uint64_t) * 2); // Skip transaction and timestamp
 	foreach (const DeserializableHBaseOperation::RowValues& row, mutate.rows()) {
+		if (mutate.type() == HBaseOperation::CLASS_DELETE_BATCH && row.second.size() == 0) {
+			// TODO: there is no timestamp for the whole request
+			DeleteRequest* request = new DeleteRequest(mutate.table(), row.first);
+			process(request);
+		}
 		foreach (const DeserializableHBaseOperation::FamilyValues& family, row.second) {
+			if (mutate.type() == HBaseOperation::CLASS_DELETE_BATCH && family.second.size() == 0) {
+				// TODO: there is no timestamp for the whole family
+				DeleteRequest* request = new DeleteRequest(mutate.table(), row.first, family.first);
+				process(request);
+			}
 			foreach (const DeserializableHBaseOperation::QualifierValue& qv, family.second) {
-				PutRequest* pr = new PutRequest(mutate.table(), row.first, family.first, qv.qualifier(), qv.value(), qv.timestamp());
-				pr->set_bufferable(true);
-				pr->set_durable(true);
-				PendingRequest* pending = new PendingRequest(client, pr);
-				connect(pending, SIGNAL(finished()), this, SLOT(handle_finished()));
-
-				try {
-					pending->process();
-					pending_requests.insert(pending);
-				} catch (JavaException& e) {
-					TWARN("EXCEPTION: [%s] %s", e.name(), e.what());
-					delete pr;
-					delete pending;
-				}
+				AsyncHBase::HBaseRpc::BatchProcessable* request;
+				if (mutate.type() == HBaseOperation::CLASS_DELETE_BATCH)
+					request = new DeleteRequest(mutate.table(), row.first, family.first, qv.qualifier(), qv.timestamp());
+				else
+					request = new PutRequest(mutate.table(), row.first, family.first, qv.qualifier(), qv.value(), qv.timestamp());
+				process(request);
 			}
 		}
 	}
+
 	return true;
 }
 
@@ -294,15 +314,7 @@ void BatchRequests::handle_finished()
 
 void PendingRequest::process()
 {
-	QFuture<void> future;
-
-	PutRequest* put = dynamic_cast<PutRequest*>(request_);
-	if (put != NULL)
-		future = client_->put(*put);
-	else
-		TERROR("Invalid RPC to process");
-	// TODO: If this happens our client is going to hang...
-	setFuture(future);
+	setFuture(request_->process(client_));
 }
 
 bool PendingRequest::retry(int delay, int limit)

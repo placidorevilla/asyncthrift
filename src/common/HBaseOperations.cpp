@@ -57,7 +57,7 @@ static inline T deserialize_integer(uint8_t** buffer)
 	return val;
 }
 
-size_t SerializableHBaseOperation::MutateRows::size(bool deletes)
+size_t SerializableHBaseOperation::MutateRows::size(bool deletes) const
 {
 	size_t size = 0;
 	num_rows = 0;
@@ -69,13 +69,16 @@ size_t SerializableHBaseOperation::MutateRows::size(bool deletes)
 	for (auto batch_mutation = row_batches.begin(); batch_mutation != row_batches.end(); batch_mutation++) {
 		size_t ops_size = 0;
 		std::map<std::string, std::vector<const Mutation*> > families;
+		bool non_corresponding = false;
 
 		ops_size += size_bigtext(batch_mutation->row); // RowKey
 		ops_size += sizeof(uint8_t); // Number of families
 
 		for (auto mutation = batch_mutation->mutations.begin(); mutation != batch_mutation->mutations.end(); mutation++) {
-			if (!((mutation->isDelete && deletes) || (!mutation->isDelete && !deletes)))
+			if (!((mutation->isDelete && deletes) || (!mutation->isDelete && !deletes))) {
+				non_corresponding = true;
 				continue;
+			}
 
 			size_t pos = mutation->column.find_first_of(':');
 			if (pos == std::string::npos || pos == (mutation->column.size() - 1)) {
@@ -105,7 +108,7 @@ size_t SerializableHBaseOperation::MutateRows::size(bool deletes)
 			ops_size += sizeof(uint8_t); // Number of qualifiers
 		}
 
-		if (families.size() != 0) {
+		if (families.size() != 0 || !non_corresponding) {
 			size += ops_size;
 			num_rows++;
 		}
@@ -121,7 +124,7 @@ size_t SerializableHBaseOperation::MutateRows::size(bool deletes)
 	return size;
 }
 
-void SerializableHBaseOperation::MutateRows::serialize(void* buffer_, bool deletes)
+void SerializableHBaseOperation::MutateRows::serialize(void* buffer_, bool deletes) const
 {
 	uint8_t* buffer = reinterpret_cast<uint8_t*>(buffer_);
 
@@ -133,9 +136,6 @@ void SerializableHBaseOperation::MutateRows::serialize(void* buffer_, bool delet
 	auto batch_mutation = row_batches.begin();
 	auto families = families_per_row.begin();
 	for (; batch_mutation != row_batches.end(); batch_mutation++, families++) {
-		if (families->size() == 0)
-			continue;
-		
 //		printf("\trow '%s' (%u families)\n", batch_mutation->row.c_str(), (uint8_t)families->size());
 		serialize_bigtext(&buffer, batch_mutation->row);
 		serialize_integer(&buffer, (uint8_t)families->size());

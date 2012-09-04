@@ -107,6 +107,7 @@ public:
 		throw TException("Not implemented");
 		return;
 	}
+
 	void mutateRow(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations);
 
 	void mutateRowTs(const Text& tableName, const Text& row, const std::vector<Mutation> & mutations, const int64_t timestamp);
@@ -120,22 +121,15 @@ public:
 		int64_t _return = 0;
 		return _return;
 	}
-	void deleteAll(const Text& /* tableName */, const Text& /* row */, const Text& /* column */) {
-		throw TException("Not implemented");
-		return;
-	}
-	void deleteAllTs(const Text& /* tableName */, const Text& /* row */, const Text& /* column */, const int64_t /* timestamp */) {
-		throw TException("Not implemented");
-		return;
-	}
-	void deleteAllRow(const Text& /* tableName */, const Text& /* row */) {
-		throw TException("Not implemented");
-		return;
-	}
-	void deleteAllRowTs(const Text& /* tableName */, const Text& /* row */, const int64_t /* timestamp */) {
-		throw TException("Not implemented");
-		return;
-	}
+
+	void deleteAll(const Text& tableName, const Text& row, const Text& column);
+
+	void deleteAllTs(const Text& tableName, const Text& row, const Text& column, const int64_t timestamp);
+
+	void deleteAllRow(const Text& tableName, const Text& row);
+
+	void deleteAllRowTs(const Text& tableName, const Text& row, const int64_t timestamp);
+
 	ScannerID scannerOpen(const Text& /* tableName */, const Text& /* startRow */, const std::vector<Text> & /* columns */) {
 		throw TException("Not implemented");
 		ScannerID _return = 0;

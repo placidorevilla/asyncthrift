@@ -56,34 +56,57 @@ void HBaseHandler::mutateRows(const Text& tableName, const std::vector<BatchMuta
 
 void HBaseHandler::mutateRowsTs(const Text& tableName, const std::vector<BatchMutation> & rowBatches, const int64_t timestamp)
 {
+	d->serialize(SerializableHBaseOperation::PutRows(tableName, rowBatches, timestamp));
+	d->serialize(SerializableHBaseOperation::DeleteRows(tableName, rowBatches, timestamp));
+}
+
+void HBaseHandler::deleteAll(const Text& tableName, const Text& row, const Text& column)
+{
+	deleteAllTs(tableName, row, column, current_timestamp());
+}
+
+void HBaseHandler::deleteAllTs(const Text& tableName, const Text& row, const Text& column, const int64_t timestamp)
+{
+	std::vector<BatchMutation> rowBatches;
+	BatchMutation batchMutation;
+	if (!column.empty()) {
+		std::vector<Mutation> mutations;
+		Mutation mutation;
+		mutation.__set_isDelete(true);
+		mutation.__set_column(column);
+		mutations.push_back(mutation);
+		batchMutation.__set_mutations(mutations);
+	}
+	batchMutation.__set_row(row);
+	rowBatches.push_back(batchMutation);
+
+	d->serialize(SerializableHBaseOperation::DeleteRows(tableName, rowBatches, timestamp));
+}
+
+void HBaseHandler::deleteAllRow(const Text& tableName, const Text& row)
+{
+	deleteAllTs(tableName, row, Text(), current_timestamp());
+}
+
+void HBaseHandler::deleteAllRowTs(const Text& tableName, const Text& row, const int64_t timestamp)
+{
+	deleteAllTs(tableName, row, Text(), timestamp);
+}
+
+void HBaseHandlerPrivate::serialize(const SerializableHBaseOperation::SerializableInterface& operation)
+{
 	unsigned long tnx;
 	size_t size;
 
-	SerializableHBaseOperation::PutRows put(tableName, rowBatches, timestamp);
-	SerializableHBaseOperation::DeleteRows del(tableName, rowBatches, timestamp);
-
-	if ((size = put.size()) != 0) {
-		void* buffer = d->buffer()->alloc_write(size, &tnx);
-		if (!buffer) {
+	if ((size = operation.size()) != 0) {
+		void* buf = buffer()->alloc_write(size, &tnx);
+		if (!buf) {
 			TWARN("Invalid state for ring buffer");
 			return;
 		}
 
-		put.serialize(buffer);
-		d->buffer()->commit_write(tnx);
+		operation.serialize(buf);
+		buffer()->commit_write(tnx);
 	}
-
-	if ((size = del.size()) != 0) {
-		void* buffer = d->buffer()->alloc_write(size, &tnx);
-		if (!buffer) {
-			TWARN("Invalid state for ring buffer");
-			return;
-		}
-
-		del.serialize(buffer);
-		d->buffer()->commit_write(tnx);
-	}
-
-	return;
 }
 

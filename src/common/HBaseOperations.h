@@ -18,8 +18,8 @@ class SerializableHBaseOperation : public HBaseOperation {
 public:
 	class SerializableInterface {
 	public:
-		size_t size();
-		void serialize(void* buffer);
+		virtual size_t size() const = 0;
+		virtual void serialize(void* buffer) const = 0;
 	};
 
 	class MutateRows : public SerializableInterface {
@@ -28,16 +28,16 @@ public:
 			tableName(tableName), row_batches(row_batches), timestamp(timestamp), num_rows(0)
 		{}
 
-		size_t size(bool deletes);
-		void serialize(void* buffer, bool deletes);
+		size_t size(bool deletes) const;
+		void serialize(void* buffer, bool deletes) const;
 
 		const Text& tableName;
 		const std::vector<BatchMutation> & row_batches;
 		const int64_t timestamp;
 
 	private:
-		uint8_t num_rows;
-		std::vector<std::map<std::string, std::vector<const Mutation*> > > families_per_row;
+		mutable uint8_t num_rows;
+		mutable std::vector<std::map<std::string, std::vector<const Mutation*> > > families_per_row;
 	};
 
 	class PutRows : public MutateRows {
@@ -46,8 +46,8 @@ public:
 			MutateRows(tableName, row_batches, timestamp)
 		{}
 
-		size_t size() { return MutateRows::size(false); }
-		void serialize(void* buffer) { MutateRows::serialize(buffer, false); }
+		virtual size_t size() const { return MutateRows::size(false); }
+		virtual void serialize(void* buffer) const { MutateRows::serialize(buffer, false); }
 	};
 
 	class DeleteRows : public MutateRows {
@@ -56,8 +56,8 @@ public:
 			MutateRows(tableName, row_batches, timestamp)
 		{}
 
-		size_t size() { return MutateRows::size(true); }
-		void serialize(void* buffer) { MutateRows::serialize(buffer, true); }
+		virtual size_t size() const { return MutateRows::size(true); }
+		virtual void serialize(void* buffer) const { MutateRows::serialize(buffer, true); }
 	};
 };
 

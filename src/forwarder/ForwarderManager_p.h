@@ -99,6 +99,8 @@ private slots:
 	void handle_finished();
 
 private:
+	bool process(AsyncHBase::HBaseRpc::BatchProcessable* request);
+
 	QVector<char> buffer_;
 	QSet<PendingRequest*> pending_requests;
 	AsyncHBase::HBaseClient* client;
@@ -112,11 +114,11 @@ class PendingRequest : public QFutureWatcher<void>
 	T_LOGGER_DECLARE(PendingRequest);
 
 public:
-	explicit PendingRequest(AsyncHBase::HBaseClient* client, AsyncHBase::HBaseRpc* request = 0) : client_(client), request_(request), delay(0), tries(1) {}
+	explicit PendingRequest(AsyncHBase::HBaseClient* client, AsyncHBase::HBaseRpc::BatchProcessable* request = 0) : client_(client), request_(request), delay(0), tries(1) {}
 	~PendingRequest() {}
 
-	AsyncHBase::HBaseRpc* request() { return request_; }
-	void set_request(AsyncHBase::HBaseRpc* request) { request_ = request; }
+	AsyncHBase::HBaseRpc::BatchProcessable* request() { return request_; }
+	void set_request(AsyncHBase::HBaseRpc::BatchProcessable* request) { request_ = request; }
 
 	void process();
 	bool retry(int delay = 0, int limit = 10);
@@ -126,7 +128,7 @@ protected:
 
 private:
 	AsyncHBase::HBaseClient* client_;
-	AsyncHBase::HBaseRpc* request_;
+	AsyncHBase::HBaseRpc::BatchProcessable* request_;
 	int delay;
 	int tries;
 };

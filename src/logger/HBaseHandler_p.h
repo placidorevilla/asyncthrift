@@ -2,6 +2,7 @@
 #define HBASEHANDLER_P_H
 
 #include "TLogger.h"
+#include "HBaseOperations.h"
 
 #include <QObject>
 
@@ -17,6 +18,7 @@ public:
 	virtual ~HBaseHandlerPrivate();
 
 	NBRingByteBuffer* buffer() { return buffer_; }
+	void serialize(const SerializableHBaseOperation::SerializableInterface& operation);
 
 private:
 	NBRingByteBuffer* buffer_;

@@ -53,6 +53,12 @@ QFuture<void> HBaseClient::put(const PutRequest& request)
 	return Deferred::newFuture(o);
 }
 
+QFuture<void> HBaseClient::del(const DeleteRequest& request)
+{
+	jobject o = invokeInstanceMethod("delete", "(Lorg/hbase/async/DeleteRequest;)Lcom/stumbleupon/async/Deferred;", request.getJObject()).l;
+	return Deferred::newFuture(o);
+}
+
 long HBaseClient::rootLookupCount() const
 {
 	return invokeInstanceMethod("rootLookupCount", "()J").j;
@@ -218,6 +224,37 @@ jobject PutRequest::getJObject() const
 	env->DeleteLocalRef(family_array);
 	env->DeleteLocalRef(qualifier_array);
 	env->DeleteLocalRef(value_array);
+	
+	return JavaObject::getJObject();
+}
+
+DEFINE_JAVA_CLASS_NAME(DeleteRequest, "org/hbase/async/DeleteRequest");
+
+jobject DeleteRequest::getJObject() const
+{
+	JNIEnv* env = getJNIEnv();
+
+	jbyteArray table_array = jbyteArray_from_QByteArray(table(), env);
+	jbyteArray key_array = jbyteArray_from_QByteArray(key(), env);
+
+	if (!family().isEmpty()) {
+		jbyteArray family_array = jbyteArray_from_QByteArray(family(), env);
+
+		if (!qualifier().isEmpty()) {
+			jbyteArray qualifier_array = jbyteArray_from_QByteArray(qualifier(), env);
+
+			constructNewObject("([B[B[B[BJ)V", table_array, key_array, family_array, qualifier_array, timestamp());
+			env->DeleteLocalRef(qualifier_array);
+		} else {
+			constructNewObject("([B[B[BJ)V", table_array, key_array, family_array, timestamp());
+		}
+		env->DeleteLocalRef(family_array);
+	} else {
+		constructNewObject("([B[BJ)V", table_array, key_array, timestamp());
+	}
+
+	env->DeleteLocalRef(table_array);
+	env->DeleteLocalRef(key_array);
 	
 	return JavaObject::getJObject();
 }

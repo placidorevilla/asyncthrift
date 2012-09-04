@@ -7,6 +7,8 @@
 #include <QFuture>
 
 namespace AsyncHBase {
+class HBaseClient;
+
 // TODO: update API to asynchbase 1.3.1
 
 #define DECLARE_HAS_PROPERTY(type, name, prop) \
@@ -29,6 +31,12 @@ public:
 	DECLARE_HAS_PROPERTY(QByteArray, Qualifier, qualifier);
 	DECLARE_HAS_PROPERTY(QByteArray, Value, value);
 	DECLARE_HAS_PROPERTY(long, Timestamp, timestamp);
+
+	class BatchProcessable {
+	public:
+		virtual QFuture<void> process(HBaseClient* client) = 0;
+		virtual ~BatchProcessable() {}
+	};
 
 	HBaseRpc(const QByteArray& table, const QByteArray& key) : table_(table), key_(key) {}
 	virtual ~HBaseRpc() {}
@@ -56,14 +64,28 @@ private:
 	bool durable_;
 };
 
-class PutRequest : public JavaObject, public BatchableRpc, public HBaseRpc::HasQualifier, public HBaseRpc::HasValue {
+class PutRequest : public JavaObject, public BatchableRpc, public HBaseRpc::HasQualifier, public HBaseRpc::HasValue, public HBaseRpc::BatchProcessable {
 	DECLARE_JAVA_CLASS_NAME
 
 public:
 	PutRequest(const QByteArray& table, const QByteArray& key, const QByteArray& family, const QByteArray& qualifier, const QByteArray& value, long timestamp = KeyValue::TIMESTAMP_NOW) :
 		JavaObject(), BatchableRpc(table, key, family, timestamp), HBaseRpc::HasQualifier(qualifier), HBaseRpc::HasValue(value)
 	{}
+	virtual QFuture<void> process(HBaseClient* client);
 	virtual ~PutRequest() {}
+
+	jobject getJObject() const;
+};
+
+class DeleteRequest : public JavaObject, public BatchableRpc, public HBaseRpc::HasQualifier, public HBaseRpc::BatchProcessable {
+	DECLARE_JAVA_CLASS_NAME
+
+public:
+	DeleteRequest(const QByteArray& table, const QByteArray& key, const QByteArray& family = QByteArray(), const QByteArray& qualifier = QByteArray(), long timestamp = KeyValue::TIMESTAMP_NOW) :
+		JavaObject(), BatchableRpc(table, key, family, timestamp), HBaseRpc::HasQualifier(qualifier)
+	{}
+	virtual QFuture<void> process(HBaseClient* client);
+	virtual ~DeleteRequest() {}
 
 	jobject getJObject() const;
 };
@@ -77,11 +99,22 @@ public:
 	long contendedMetaLookupCount() const;
 	short getFlushInterval() const;
 	QFuture<void> put(const PutRequest& request);
+	QFuture<void> del(const DeleteRequest& request);
 	long rootLookupCount() const;
 	short setFlushInterval(short flush_interval);
 	QFuture<void> shutdown();
 	long uncontendedMetaLookupCount() const;
 };
+
+inline QFuture<void> PutRequest::process(HBaseClient* client)
+{
+	return client->put(*this);
+}
+
+inline QFuture<void> DeleteRequest::process(HBaseClient* client)
+{
+	return client->del(*this);
+}
 
 class HBaseException : public QtConcurrent::Exception {
 public:
