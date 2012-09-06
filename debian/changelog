@@ -1,3 +1,12 @@
+asyncthrift (0.1.0-tuenti3) stable; urgency=low
+
+  * Update mtime of current file even if there is no activity, to avoid rotation
+  * Ignore still known binlog files which don't exist anymore
+  * Retry recoverable exceptions and delay pleasethrottle exceptions
+  * Serialize and process delete operations
+
+ -- Placido Revilla <previlla@tuenti.com>  Thu, 06 Sep 2012 09:24:31 +0200
+
 asyncthrift (0.1.0-tuenti2) unstable; urgency=low
 
   * Fix a file descriptor leak on readahead
