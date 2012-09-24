@@ -214,19 +214,23 @@ uint64_t LogReadContext::read_next_transaction(char** buffer, size_t* size)
 {
 	uint64_t transaction = UINT64_MAX;
 	StorageReadContext* context_to_advance = 0;
+	char* buf;
+	size_t siz;
 	
 	foreach (StorageReadContext* context, storage_contexts) {
-		uint64_t next_transaction = context->peek_next_transaction(buffer, size);
+		uint64_t next_transaction = context->peek_next_transaction(&buf, &siz);
 		if (!next_transaction) {
 			if (!context->advance())
 				continue;
-			next_transaction = context->peek_next_transaction(buffer, size);
+			next_transaction = context->peek_next_transaction(&buf, &siz);
 			if (!next_transaction)
 				continue;
 		}
 		if (next_transaction < transaction) {
 			transaction = next_transaction;
 			context_to_advance = context;
+			*buffer = buf;
+			*size = siz;
 		}
 	}
 
