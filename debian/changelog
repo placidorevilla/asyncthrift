@@ -1,3 +1,9 @@
+asyncthrift (0.1.0-tuenti4) stable; urgency=low
+
+  * Bugfix: forward the correct transaction when reading from multiple logs, not the last one
+
+ -- Placido Revilla <previlla@tuenti.com>  Mon, 24 Sep 2012 10:48:13 +0200
+
 asyncthrift (0.1.0-tuenti3) stable; urgency=low
 
   * Update mtime of current file even if there is no activity, to avoid rotation
