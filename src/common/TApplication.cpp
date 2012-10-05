@@ -6,6 +6,7 @@
 
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <pwd.h>
 
 TApplication::TApplication(int& argc, char** argv) : QCoreApplication(argc, argv), daemon_signal_notifier(0), daemonized(false)
@@ -74,6 +75,7 @@ bool TApplication::init(const QList<int>& hsignals, bool daemonize, const QStrin
 
 //		sleep(10);
 
+		umask(0022);
 		if (daemon_pid_file_create())
 			fprintf(stderr, "Cannot create pid file (%s)\n", strerror(errno));
 
