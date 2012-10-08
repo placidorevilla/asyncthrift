@@ -1,3 +1,11 @@
+asyncthrift (0.1.0-tuenti5) stable; urgency=low
+
+  * Added logread, a program to decode asyncthrift logs
+  * umask(0022) after fork
+  * Set ulimits for nofile and core in default
+
+ -- Placido Revilla <previlla@tuenti.com>  Mon, 08 Oct 2012 16:23:41 +0200
+
 asyncthrift (0.1.0-tuenti4) stable; urgency=low
 
   * Bugfix: forward the correct transaction when reading from multiple logs, not the last one
